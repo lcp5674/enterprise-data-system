@@ -22,72 +22,75 @@ import {
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useAuthStore, useAppStore } from '../stores';
+import { useMenuI18n, useCommonI18n } from '../hooks/useI18n';
 import styles from './BasicLayout.less';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
 
-// 菜单配置
-const menuItems = [
-  {
-    key: '/home',
-    icon: <HomeOutlined />,
-    label: '工作台',
-  },
-  {
-    key: '/assets',
-    icon: <DatabaseOutlined />,
-    label: '资产管理',
-    children: [
-      { key: '/assets/list', label: '资产列表' },
-      { key: '/assets/favorites', label: '我的收藏' },
-      { key: '/assets/create', label: '注册资产' },
-    ],
-  },
-  {
-    key: '/catalog',
-    icon: <FolderOutlined />,
-    label: '数据目录',
-    children: [
-      { key: '/catalog/tree', label: '目录树' },
-      { key: '/catalog/domain', label: '业务域' },
-    ],
-  },
-  {
-    key: '/lineage',
-    icon: <ShareAltOutlined />,
-    label: '数据地图',
-    children: [
-      { key: '/lineage/graph', label: '血缘图' },
-      { key: '/lineage/impact', label: '影响分析' },
-    ],
-  },
-  {
-    key: '/quality',
-    icon: <CheckCircleOutlined />,
-    label: '质量管理',
-    children: [
-      { key: '/quality/overview', label: '质量概览' },
-      { key: '/quality/rules', label: '质量规则' },
-      { key: '/quality/issues', label: '问题追踪' },
-    ],
-  },
-  {
-    key: '/system',
-    icon: <SettingOutlined />,
-    label: '系统管理',
-    children: [
-      { key: '/system/users', label: '用户管理' },
-      { key: '/system/roles', label: '角色权限' },
-      { key: '/system/datasources', label: '数据源配置' },
-    ],
-  },
-];
-
 const BasicLayout: React.FC = () => {
   const navigate = useNavigate();
   const { user, logout, initialize, isAuthenticated } = useAuthStore();
-  const { sidebarCollapsed, toggleSidebar, language, notificationCount } = useAppStore();
+  const { sidebarCollapsed, toggleSidebar, language, notificationCount, setLanguage } = useAppStore();
+  const { t: tMenu } = useMenuI18n();
+  const { t: tCommon } = useCommonI18n();
+
+  // 菜单配置
+  const menuItems = [
+    {
+      key: '/home',
+      icon: <HomeOutlined />,
+      label: tMenu('dashboard'),
+    },
+    {
+      key: '/assets',
+      icon: <DatabaseOutlined />,
+      label: tMenu('asset.title'),
+      children: [
+        { key: '/assets/list', label: tMenu('asset.list') },
+        { key: '/assets/favorites', label: tMenu('asset.favorites') },
+        { key: '/assets/create', label: tMenu('asset.create') },
+      ],
+    },
+    {
+      key: '/catalog',
+      icon: <FolderOutlined />,
+      label: tMenu('catalog.title'),
+      children: [
+        { key: '/catalog/tree', label: tMenu('catalog.tree') },
+        { key: '/catalog/domain', label: tMenu('catalog.domain') },
+      ],
+    },
+    {
+      key: '/lineage',
+      icon: <ShareAltOutlined />,
+      label: tMenu('lineage.title'),
+      children: [
+        { key: '/lineage/graph', label: tMenu('lineage.graph') },
+        { key: '/lineage/impact', label: tMenu('lineage.impact') },
+      ],
+    },
+    {
+      key: '/quality',
+      icon: <CheckCircleOutlined />,
+      label: tMenu('quality.title'),
+      children: [
+        { key: '/quality/overview', label: tMenu('quality.overview') },
+        { key: '/quality/rules', label: tMenu('quality.rules') },
+        { key: '/quality/issues', label: tMenu('quality.issues') },
+      ],
+    },
+    {
+      key: '/system',
+      icon: <SettingOutlined />,
+      label: tMenu('system.title'),
+      children: [
+        { key: '/system/users', label: tMenu('system.users') },
+        { key: '/system/roles', label: tMenu('system.roles') },
+        { key: '/system/datasources', label: tMenu('system.datasources') },
+      ],
+    },
+  ];
 
   // 初始化认证状态
   useEffect(() => {
@@ -138,18 +141,18 @@ const BasicLayout: React.FC = () => {
     {
       key: 'profile',
       icon: <UserOutlined />,
-      label: '个人中心',
+      label: tMenu('user.profile'),
     },
     {
       key: 'settings',
       icon: <SettingOutlined />,
-      label: '账号设置',
+      label: tMenu('user.settings'),
     },
     { type: 'divider' as const },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: '退出登录',
+      label: tMenu('user.logout'),
       danger: true,
     },
   ];
@@ -172,6 +175,7 @@ const BasicLayout: React.FC = () => {
   // 切换语言
   const handleLanguageChange = () => {
     const newLanguage = language === 'zh-CN' ? 'en-US' : 'zh-CN';
+    setLanguage(newLanguage);
     localStorage.setItem('language', newLanguage);
     window.location.reload();
   };
@@ -195,7 +199,7 @@ const BasicLayout: React.FC = () => {
             {!sidebarCollapsed ? (
               <div className={styles.logoText}>
                 <DatabaseOutlined className={styles.logoIcon} />
-                <span>数据资产管理系统</span>
+                <span>{tCommon('app.title')}</span>
               </div>
             ) : (
               <DatabaseOutlined className={styles.logoIconCollapsed} />
@@ -232,7 +236,7 @@ const BasicLayout: React.FC = () => {
               <Badge count={notificationCount} size="small">
                 <BellOutlined
                   className={styles.headerIcon}
-                  onClick={() => navigate('/notifications')}
+                  onClick={() => navigate(tMenu('system.notifications') ? '/notifications' : '/system')}
                 />
               </Badge>
 

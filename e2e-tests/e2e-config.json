@@ -1,0 +1,176 @@
+{
+  "name": "edams-e2e-tests",
+  "version": "1.0.0",
+  "description": "企业数据资产管理系统端到端测试配置",
+  "baseUrl": "http://localhost:8000",
+  "apiUrl": "http://localhost:8888",
+  
+  "testUsers": {
+    "admin": {
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "email": "admin@edams.com"
+    },
+    "analyst": {
+      "username": "analyst",
+      "password": "analyst123",
+      "role": "analyst",
+      "email": "analyst@edams.com"
+    },
+    "operator": {
+      "username": "operator",
+      "password": "operator123",
+      "role": "operator",
+      "email": "operator@edams.com"
+    },
+    "viewer": {
+      "username": "viewer",
+      "password": "viewer123",
+      "role": "viewer",
+      "email": "viewer@edams.com"
+    }
+  },
+
+  "timeouts": {
+    "default": 30000,
+    "api": 10000,
+    "navigation": 30000,
+    "element": 10000,
+    "pageLoad": 60000
+  },
+
+  "retry": {
+    "count": 2,
+    "delay": 1000
+  },
+
+  "screenshot": {
+    "mode": "only-on-failure",
+    "fullPage": true
+  },
+
+  "video": {
+    "mode": "retain-on-failure"
+  },
+
+  "trace": {
+    "mode": "on-first-retry"
+  },
+
+  "datasources": {
+    "mysql": {
+      "type": "mysql",
+      "host": "localhost",
+      "port": 3306,
+      "database": "edams_test",
+      "username": "root",
+      "password": "root123"
+    },
+    "postgresql": {
+      "type": "postgresql",
+      "host": "localhost",
+      "port": 5432,
+      "database": "edams_test",
+      "username": "postgres",
+      "password": "postgres123"
+    }
+  },
+
+  "testData": {
+    "assets": {
+      "tables": [
+        { "name": "customer_info", "database": "sales", "schema": "public" },
+        { "name": "order_details", "database": "sales", "schema": "public" },
+        { "name": "product_catalog", "database": "inventory", "schema": "public" }
+      ]
+    },
+    "catalogs": [
+      { "name": "客户域", "code": "customer_domain" },
+      { "name": "订单域", "code": "order_domain" },
+      { "name": "产品域", "code": "product_domain" }
+    ],
+    "qualityRules": [
+      { "name": "完整性检查", "type": "completeness" },
+      { "name": "唯一性检查", "type": "uniqueness" },
+      { "name": "一致性检查", "type": "consistency" },
+      { "name": "有效性检查", "type": "validity" }
+    ],
+    "roles": [
+      { "name": "数据分析师", "code": "data_analyst", "type": "custom" },
+      { "name": "数据管理员", "code": "data_admin", "type": "custom" }
+    ],
+    "maskingRules": [
+      { "name": "手机号脱敏", "pattern": "PHONE", "type": "partial" },
+      { "name": "身份证脱敏", "pattern": "ID_CARD", "type": "partial" },
+      { "name": "邮箱脱敏", "pattern": "EMAIL", "type": "domain" }
+    ]
+  },
+
+  "locators": {
+    "login": {
+      "usernameInput": '[data-testid="login-username"] >> input >> nth=0',
+      "passwordInput": '[data-testid="login-password"] input',
+      "captchaInput": '[data-testid="login-captcha"] input',
+      "submitButton": 'button[type="submit"]',
+      "loginTab": '.ant-tabs-tab:has-text("账号密码")',
+      "mobileTab": '.ant-tabs-tab:has-text("手机验证码")',
+      "wechatButton": 'button:has-text("微信")',
+      "dingtalkButton": 'button:has-text("钉钉")'
+    },
+    "asset": {
+      "searchInput": 'input[placeholder*="搜索"]',
+      "searchButton": 'button:has-text("搜索")',
+      "assetList": '.asset-list, .ant-table-tbody',
+      "assetItem": '.ant-table-row',
+      "favoriteButton": 'button[aria-label*="收藏"]',
+      "detailButton": 'a:has-text("详情"), button:has-text("详情")'
+    },
+    "catalog": {
+      "treeContainer": '.catalog-tree, .ant-tree',
+      "createButton": 'button:has-text("新建目录"), button:has-text("创建")',
+      "nameInput": 'input[placeholder*="名称"]',
+      "codeInput": 'input[placeholder*="编码"]'
+    },
+    "quality": {
+      "rulesList": '.quality-rules, .ant-table',
+      "createButton": 'button:has-text("创建规则")',
+      "ruleNameInput": 'input[placeholder*="规则名称"]',
+      "executeButton": 'button:has-text("执行检测")',
+      "reportButton": 'button:has-text("生成报告")'
+    },
+    "system": {
+      "usersTab": '.ant-menu-item:has-text("用户管理")',
+      "rolesTab": '.ant-menu-item:has-text("角色权限")',
+      "createUserButton": 'button:has-text("新建用户")',
+      "createRoleButton": 'button:has-text("新建角色")',
+      "permissionTree": '.permission-tree, .ant-tree'
+    },
+    "common": {
+      "confirmButton": 'button:has-text("确定"), button:has-text("确认")',
+      "cancelButton": 'button:has-text("取消")',
+      "saveButton": 'button:has-text("保存")',
+      "deleteButton": 'button:has-text("删除")',
+      "successMessage": '.ant-message-success, [class*="success"]',
+      "errorMessage": '.ant-message-error, [class*="error"]'
+    }
+  },
+
+  "environments": {
+    "dev": {
+      "baseUrl": "http://localhost:8000",
+      "apiUrl": "http://localhost:8888",
+      "mockEnabled": true
+    },
+    "test": {
+      "baseUrl": "http://test.edams.example.com",
+      "apiUrl": "http://test-api.edams.example.com",
+      "mockEnabled": false
+    },
+    "prod": {
+      "baseUrl": "https://edams.example.com",
+      "apiUrl": "https://api.edams.example.com",
+      "mockEnabled": false
+    }
+  }
+}

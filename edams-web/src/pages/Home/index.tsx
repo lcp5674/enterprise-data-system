@@ -22,6 +22,7 @@ import {
 } from '@/components/Charts';
 import type { ColumnsType } from 'antd/es/table';
 import type { DataAsset } from '@/types';
+import { useDashboardI18n, useCommonI18n } from '@/hooks/useI18n';
 import styles from './index.less';
 
 const { Title, Text } = Typography;

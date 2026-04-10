@@ -1,0 +1,68 @@
+{
+  "title": "资产管理",
+  "list": {
+    "title": "资产列表",
+    "add": "添加资产",
+    "search": "搜索资产",
+    "filter": "筛选",
+    "export": "导出",
+    "columns": {
+      "name": "资产名称",
+      "type": "资产类型",
+      "owner": "负责人",
+      "status": "状态",
+      "quality": "质量分",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "actions": "操作"
+    },
+    "status": {
+      "active": "活跃",
+      "deprecated": "已弃用",
+      "archived": "已归档"
+    },
+    "type": {
+      "database": "数据库",
+      "table": "数据表",
+      "file": "文件",
+      "api": "API接口",
+      "report": "报表",
+      "dashboard": "仪表板"
+    }
+  },
+  "detail": {
+    "title": "资产详情",
+    "basicInfo": "基本信息",
+    "metadata": "元数据",
+    "lineage": "血缘关系",
+    "quality": "质量信息",
+    "history": "变更历史",
+    "tags": "标签",
+    "comments": "评论"
+  },
+  "create": {
+    "title": "注册新资产",
+    "step1": "基本信息",
+    "step2": "元数据配置",
+    "step3": "质量规则",
+    "step4": "访问权限",
+    "name": "资产名称",
+    "description": "资产描述",
+    "type": "资产类型",
+    "owner": "负责人",
+    "tags": "标签",
+    "submit": "提交审核",
+    "saveDraft": "保存草稿"
+  },
+  "quality": {
+    "excellent": "优秀 (≥90)",
+    "good": "良好 (80-89)",
+    "fair": "一般 (60-79)",
+    "poor": "较差 (<60)",
+    "metrics": "质量指标",
+    "completeness": "完整性",
+    "consistency": "一致性",
+    "timeliness": "及时性",
+    "accuracy": "准确性"
+  }
+}

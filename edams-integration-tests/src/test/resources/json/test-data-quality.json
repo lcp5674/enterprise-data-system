@@ -1,0 +1,106 @@
+{
+  "qualityRules": [
+    {
+      "id": 1,
+      "name": "Customer Email Not Null",
+      "ruleType": "NOT_NULL",
+      "assetId": 1,
+      "expression": "email IS NOT NULL",
+      "threshold": 99.5,
+      "status": "ACTIVE"
+    },
+    {
+      "id": 2,
+      "name": "Customer Email Format",
+      "ruleType": "REGEX",
+      "assetId": 1,
+      "expression": "email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'",
+      "threshold": 98.0,
+      "status": "ACTIVE"
+    },
+    {
+      "id": 3,
+      "name": "Order Amount Range",
+      "ruleType": "RANGE",
+      "assetId": 2,
+      "expression": "amount > 0 AND amount < 1000000",
+      "threshold": 100.0,
+      "status": "ACTIVE"
+    },
+    {
+      "id": 4,
+      "name": "Order Date Validity",
+      "ruleType": "CUSTOM",
+      "assetId": 2,
+      "expression": "order_date <= CURRENT_DATE",
+      "threshold": 100.0,
+      "status": "ACTIVE"
+    },
+    {
+      "id": 5,
+      "name": "Product SKU Unique",
+      "ruleType": "UNIQUE",
+      "assetId": 3,
+      "expression": "COUNT(*) = COUNT(DISTINCT sku)",
+      "threshold": 100.0,
+      "status": "ACTIVE"
+    }
+  ],
+  "qualityCheckResults": [
+    {
+      "id": 1,
+      "ruleId": 1,
+      "assetId": 1,
+      "checkTime": "2024-01-15T10:00:00",
+      "totalCount": 100000,
+      "errorCount": 50,
+      "errorRate": 0.05,
+      "status": "PASSED",
+      "details": "Email null check completed successfully"
+    },
+    {
+      "id": 2,
+      "ruleId": 2,
+      "assetId": 1,
+      "checkTime": "2024-01-15T10:05:00",
+      "totalCount": 99950,
+      "errorCount": 500,
+      "errorRate": 0.50,
+      "status": "PASSED",
+      "details": "Email format validation completed"
+    },
+    {
+      "id": 3,
+      "ruleId": 3,
+      "assetId": 2,
+      "checkTime": "2024-01-15T10:10:00",
+      "totalCount": 500000,
+      "errorCount": 0,
+      "errorRate": 0.0,
+      "status": "PASSED",
+      "details": "All order amounts within valid range"
+    },
+    {
+      "id": 4,
+      "ruleId": 4,
+      "assetId": 2,
+      "checkTime": "2024-01-15T10:15:00",
+      "totalCount": 500000,
+      "errorCount": 10,
+      "errorRate": 0.002,
+      "status": "PASSED",
+      "details": "Future order dates detected and flagged"
+    },
+    {
+      "id": 5,
+      "ruleId": 5,
+      "assetId": 3,
+      "checkTime": "2024-01-15T10:20:00",
+      "totalCount": 10000,
+      "errorCount": 0,
+      "errorRate": 0.0,
+      "status": "PASSED",
+      "details": "All SKUs are unique"
+    }
+  ]
+}

@@ -2,191 +2,286 @@ package com.enterprise.dataplatform.quality.service;
 
 import com.enterprise.dataplatform.quality.domain.entity.QualityRule;
 import com.enterprise.dataplatform.quality.dto.request.QualityRuleRequest;
+import com.enterprise.dataplatform.quality.dto.response.QualityRuleResponse;
 import com.enterprise.dataplatform.quality.repository.QualityRuleRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
+/**
+ * QualityRuleService 单元测试
+ */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("质量规则服务测试")
 class QualityRuleServiceTest {
 
     @Mock
     private QualityRuleRepository ruleRepository;
 
     @InjectMocks
-    private QualityRuleService ruleService;
+    private QualityRuleService qualityRuleService;
 
     private QualityRule testRule;
+    private QualityRuleRequest testRequest;
 
     @BeforeEach
     void setUp() {
         testRule = QualityRule.builder()
                 .id(1L)
-                .ruleName("完整性检测")
-                .ruleCode("RULE_001")
+                .ruleCode("RULE-001")
+                .ruleName("测试规则")
+                .description("规则描述")
                 .ruleType("COMPLETENESS")
-                .description("检测数据完整性")
-                .targetAssetType("TABLE")
-                .targetAssetSubType("COLUMN")
-                .checkSql("SELECT COUNT(*) FROM ${table}")
-                .threshold(0.95)
-                .operator("GTE")
-                .errorCode("E001")
-                .errorMessage("数据完整性低于95%")
-                .severity("HIGH")
+                .ruleCategory("NULL_CHECK")
+                .qualityDimension("完整性")
+                .severityLevel("HIGH")
+                .thresholdExpression("NOT NULL")
+                .expectedValue("100%")
+                .alertThreshold(5.0)
+                .errorThreshold(10.0)
                 .enabled(true)
-                .status("ACTIVE")
-                .createdAt(LocalDateTime.now())
-                .build();
-    }
-
-    @Test
-    void createRule_shouldCreateSuccessfully() {
-        QualityRuleRequest request = QualityRuleRequest.builder()
-                .ruleName("新规则")
-                .ruleCode("RULE_002")
-                .ruleType("ACCURACY")
-                .targetAssetType("TABLE")
+                .status("DRAFT")
+                .priority(1)
+                .version(1)
+                .creator("admin")
+                .createTime(LocalDateTime.now())
                 .build();
 
-        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
-
-        QualityRule result = ruleService.createRule(request);
-
-        assertNotNull(result);
-        verify(ruleRepository, times(1)).save(any(QualityRule.class));
-    }
-
-    @Test
-    void getRuleById_shouldReturnRuleWhenExists() {
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
-
-        Optional<QualityRule> result = ruleService.getRuleById(1L);
-
-        assertTrue(result.isPresent());
-        assertEquals(testRule.getRuleCode(), result.get().getRuleCode());
-    }
-
-    @Test
-    void getRuleById_shouldReturnEmptyWhenNotExists() {
-        when(ruleRepository.findById(99L)).thenReturn(Optional.empty());
-
-        Optional<QualityRule> result = ruleService.getRuleById(99L);
-
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void updateRule_shouldUpdateSuccessfully() {
-        QualityRuleRequest request = QualityRuleRequest.builder()
-                .ruleName("更新的规则")
-                .ruleCode("RULE_001")
+        testRequest = QualityRuleRequest.builder()
+                .ruleCode("RULE-001")
+                .ruleName("测试规则")
+                .description("规则描述")
                 .ruleType("COMPLETENESS")
-                .targetAssetType("TABLE")
-                .threshold(0.90)
+                .ruleCategory("NULL_CHECK")
+                .qualityDimension("完整性")
+                .severityLevel("HIGH")
+                .thresholdExpression("NOT NULL")
+                .expectedValue("100%")
+                .alertThreshold(5.0)
+                .errorThreshold(10.0)
+                .priority(1)
                 .build();
+    }
 
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
+    @Test
+    @DisplayName("创建质量规则 - 成功")
+    void testCreateRule_Success() {
+        // Given
+        when(ruleRepository.existsByRuleCode("RULE-001")).thenReturn(false);
         when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
 
-        QualityRule result = ruleService.updateRule(1L, request);
+        // When
+        QualityRuleResponse response = qualityRuleService.createRule(testRequest, "admin");
 
-        assertNotNull(result);
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getRuleCode()).isEqualTo("RULE-001");
+        assertThat(response.getStatus()).isEqualTo("DRAFT");
         verify(ruleRepository, times(1)).save(any(QualityRule.class));
     }
 
     @Test
-    void deleteRule_shouldDeleteSuccessfully() {
+    @DisplayName("创建质量规则 - 规则编码已存在")
+    void testCreateRule_DuplicateCode() {
+        // Given
+        when(ruleRepository.existsByRuleCode("RULE-001")).thenReturn(true);
+
+        // When & Then
+        assertThatThrownBy(() -> qualityRuleService.createRule(testRequest, "admin"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("规则编码已存在");
+    }
+
+    @Test
+    @DisplayName("更新质量规则 - 成功")
+    void testUpdateRule_Success() {
+        // Given
         when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
-        doNothing().when(ruleRepository).delete(any(QualityRule.class));
+        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
 
-        assertDoesNotThrow(() -> ruleService.deleteRule(1L));
+        QualityRuleRequest updateRequest = QualityRuleRequest.builder()
+                .ruleName("更新后的规则名称")
+                .description("更新后的描述")
+                .ruleType("COMPLETENESS")
+                .severityLevel("HIGH")
+                .build();
 
-        verify(ruleRepository, times(1)).delete(any(QualityRule.class));
+        // When
+        QualityRuleResponse response = qualityRuleService.updateRule(1L, updateRequest, "updater");
+
+        // Then
+        assertThat(response).isNotNull();
+        verify(ruleRepository, times(1)).save(any(QualityRule.class));
     }
 
     @Test
-    void getRulesByType_shouldReturnMatchingRules() {
-        when(ruleRepository.findByRuleType("COMPLETENESS")).thenReturn(List.of(testRule));
+    @DisplayName("更新质量规则 - 规则不存在")
+    void testUpdateRule_NotFound() {
+        // Given
+        when(ruleRepository.findById(999L)).thenReturn(Optional.empty());
 
-        List<QualityRule> results = ruleService.getRulesByType("COMPLETENESS");
-
-        assertNotNull(results);
-        assertEquals(1, results.size());
+        // When & Then
+        assertThatThrownBy(() -> qualityRuleService.updateRule(999L, testRequest, "updater"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("规则不存在");
     }
 
     @Test
-    void getRulesByAssetType_shouldReturnMatchingRules() {
-        when(ruleRepository.findByTargetAssetType("TABLE")).thenReturn(List.of(testRule));
+    @DisplayName("发布质量规则 - 成功")
+    void testPublishRule_Success() {
+        // Given
+        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
+        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
 
-        List<QualityRule> results = ruleService.getRulesByAssetType("TABLE");
+        // When
+        QualityRuleResponse response = qualityRuleService.publishRule(1L, "publisher");
 
-        assertNotNull(results);
-        assertEquals(1, results.size());
+        // Then
+        assertThat(response).isNotNull();
+        verify(ruleRepository, times(1)).save(any(QualityRule.class));
     }
 
     @Test
-    void getEnabledRules_shouldReturnEnabledRules() {
+    @DisplayName("启用质量规则")
+    void testSetRuleEnabled_Enable() {
+        // Given
+        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
+        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
+
+        // When
+        QualityRuleResponse response = qualityRuleService.setRuleEnabled(1L, true, "updater");
+
+        // Then
+        assertThat(response).isNotNull();
+        verify(ruleRepository, times(1)).save(any(QualityRule.class));
+    }
+
+    @Test
+    @DisplayName("禁用质量规则")
+    void testSetRuleEnabled_Disable() {
+        // Given
+        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
+        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
+
+        // When
+        QualityRuleResponse response = qualityRuleService.setRuleEnabled(1L, false, "updater");
+
+        // Then
+        assertThat(response).isNotNull();
+        verify(ruleRepository, times(1)).save(any(QualityRule.class));
+    }
+
+    @Test
+    @DisplayName("查询质量规则 - 按ID")
+    void testGetRule() {
+        // Given
+        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
+
+        // When
+        QualityRuleResponse response = qualityRuleService.getRule(1L);
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("查询质量规则 - 按编码")
+    void testGetRuleByCode() {
+        // Given
+        when(ruleRepository.findByRuleCode("RULE-001")).thenReturn(Optional.of(testRule));
+
+        // When
+        QualityRuleResponse response = qualityRuleService.getRuleByCode("RULE-001");
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getRuleCode()).isEqualTo("RULE-001");
+    }
+
+    @Test
+    @DisplayName("查询质量规则 - 规则不存在")
+    void testGetRule_NotFound() {
+        // Given
+        when(ruleRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> qualityRuleService.getRule(999L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("规则不存在");
+    }
+
+    @Test
+    @DisplayName("分页查询规则")
+    void testSearchRules() {
+        // Given
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<QualityRule> page = new PageImpl<>(List.of(testRule));
+        when(ruleRepository.searchRules(anyString(), anyString(), anyString(), any(Pageable.class)))
+                .thenReturn(page);
+
+        // When
+        Page<QualityRuleResponse> response = qualityRuleService.searchRules("COMPLETENESS", "ACTIVE", "测试", pageable);
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("获取启用的规则列表")
+    void testGetEnabledRules() {
+        // Given
         when(ruleRepository.findByEnabled(true)).thenReturn(List.of(testRule));
 
-        List<QualityRule> results = ruleService.getEnabledRules();
+        // When
+        List<QualityRuleResponse> rules = qualityRuleService.getEnabledRules();
 
-        assertNotNull(results);
-        assertEquals(1, results.size());
-        assertTrue(results.get(0).getEnabled());
+        // Then
+        assertThat(rules).isNotNull();
+        assertThat(rules).hasSize(1);
     }
 
     @Test
-    void searchRules_shouldReturnMatchingRules() {
-        when(ruleRepository.searchByKeyword("完整性")).thenReturn(List.of(testRule));
+    @DisplayName("根据资产获取规则")
+    void testGetRulesByAssetId() {
+        // Given
+        testRule.setAssetId("ASSET-001");
+        when(ruleRepository.findEnabledRulesByAssetId("ASSET-001")).thenReturn(List.of(testRule));
 
-        List<QualityRule> results = ruleService.searchRules("完整性");
+        // When
+        List<QualityRuleResponse> rules = qualityRuleService.getRulesByAssetId("ASSET-001");
 
-        assertNotNull(results);
-        assertEquals(1, results.size());
+        // Then
+        assertThat(rules).isNotNull();
+        assertThat(rules).hasSize(1);
     }
 
     @Test
-    void enableRule_shouldEnableSuccessfully() {
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
-        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
+    @DisplayName("删除质量规则")
+    void testDeleteRule() {
+        // When
+        qualityRuleService.deleteRule(1L);
 
-        QualityRule result = ruleService.enableRule(1L);
-
-        assertNotNull(result);
-        assertTrue(result.getEnabled());
-        verify(ruleRepository, times(1)).save(any(QualityRule.class));
-    }
-
-    @Test
-    void disableRule_shouldDisableSuccessfully() {
-        when(ruleRepository.findById(1L)).thenReturn(Optional.of(testRule));
-        when(ruleRepository.save(any(QualityRule.class))).thenReturn(testRule);
-
-        QualityRule result = ruleService.disableRule(1L);
-
-        assertNotNull(result);
-        assertFalse(result.getEnabled());
-        verify(ruleRepository, times(1)).save(any(QualityRule.class));
-    }
-
-    @Test
-    void getRuleTypes_shouldReturnTypeList() {
-        List<Map<String, Object>> types = ruleService.getRuleTypes();
-
-        assertNotNull(types);
-        assertFalse(types.isEmpty());
+        // Then
+        verify(ruleRepository, times(1)).deleteById(1L);
     }
 }

@@ -1,243 +1,195 @@
 package com.enterprise.dataplatform.governance.service;
 
-import com.enterprise.dataplatform.governance.domain.entity.AIRecommendation;
 import com.enterprise.dataplatform.governance.domain.entity.GovernancePolicy;
+import com.enterprise.dataplatform.governance.domain.entity.GovernanceTask;
+import com.enterprise.dataplatform.governance.domain.entity.TaskExecution;
 import com.enterprise.dataplatform.governance.dto.request.AIRecommendationRequest;
+import com.enterprise.dataplatform.governance.dto.response.AIRecommendationResponse;
 import com.enterprise.dataplatform.governance.repository.AIRecommendationRepository;
-import io.milvus.client.MilvusClient;
-import io.milvus.param.dml.QueryParam;
-import io.milvus.response.QueryResultsWrapper;
+import com.enterprise.dataplatform.governance.repository.GovernancePolicyRepository;
+import com.enterprise.dataplatform.governance.repository.GovernanceTaskRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * AIRecommendationService 单元测试
+ */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("AI推荐服务测试")
 class AIRecommendationServiceTest {
 
     @Mock
     private AIRecommendationRepository recommendationRepository;
 
     @Mock
-    private MilvusClient milvusClient;
+    private GovernancePolicyRepository policyRepository;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private GovernanceTaskRepository taskRepository;
 
     @InjectMocks
-    private AIRecommendationService recommendationService;
+    private AIRecommendationService aiRecommendationService;
 
-    private AIRecommendation testRecommendation;
     private GovernancePolicy testPolicy;
+    private GovernanceTask testTask;
 
     @BeforeEach
     void setUp() {
-        testRecommendation = AIRecommendation.builder()
-                .id(1L)
-                .recommendationType("POLICY_SUGGESTION")
-                .recommendationCode("REC001")
-                .title("建议应用质量检测策略")
-                .description("根据数据分析，建议对表T_SALES添加质量检测策略")
-                .confidenceScore(0.95)
-                .priority("HIGH")
-                .targetAssetId("TABLE_001")
-                .targetAssetType("TABLE")
-                .recommendedAction(Map.of("action", "apply_quality_rule", "ruleId", 123))
-                .status("GENERATED")
-                .accepted(false)
-                .applied(false)
-                .createdAt(LocalDateTime.now())
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build();
-
         testPolicy = GovernancePolicy.builder()
                 .id(1L)
-                .name("质量检测策略")
-                .policyType("QUALITY_CHECK")
-                .assetType("TABLE")
-                .enabled(true)
-                .createdAt(LocalDateTime.now())
+                .policyCode("POL-001")
+                .policyName("测试策略")
+                .policyType("QUALITY")
+                .status("ACTIVE")
+                .build();
+
+        testTask = GovernanceTask.builder()
+                .id(1L)
+                .taskCode("TASK-001")
+                .taskName("测试任务")
+                .taskType("ORCHESTRATION")
+                .taskStatus("PENDING")
+                .policy(testPolicy)
+                .upstreamTasks(new ArrayList<>())
+                .downstreamTasks(new ArrayList<>())
                 .build();
     }
 
     @Test
-    void getRecommendations_shouldReturnRecommendations() {
+    @DisplayName("生成质量改进建议 - 正常场景")
+    void testGenerateQualityRecommendation() {
+        // Given
         AIRecommendationRequest request = AIRecommendationRequest.builder()
-                .recommendationType("POLICY_SUGGESTION")
-                .domain("SALES")
-                .limitResults(5)
+                .assetId("ASSET-001")
+                .qualityScore(65.0)
+                .issues(List.of("缺失主键", "数据重复"))
                 .build();
 
-        when(recommendationRepository.findByTypeAndStatus(
-                eq("POLICY_SUGGESTION"), eq("GENERATED"), any()))
-                .thenReturn(List.of(testRecommendation));
+        // When
+        AIRecommendationResponse response = aiRecommendationService.generateQualityRecommendation(request);
 
-        List<AIRecommendation> results = recommendationService.getRecommendations(request);
-
-        assertNotNull(results);
-        assertEquals(1, results.size());
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getAssetId()).isEqualTo("ASSET-001");
+        assertThat(response.getRecommendations()).isNotEmpty();
     }
 
     @Test
-    void generatePolicyRecommendation_shouldGenerateSuccessfully() {
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
+    @DisplayName("生成数据分类建议 - 正常场景")
+    void testGenerateClassificationRecommendation() {
+        // Given
+        AIRecommendationRequest request = AIRecommendationRequest.builder()
+                .assetId("ASSET-002")
+                .description("用户信息表，包含姓名、手机号、身份证号")
+                .sampleData("示例数据")
+                .build();
 
-        AIRecommendation result = recommendationService.generatePolicyRecommendation(
-                "TABLE", "SALES", "TABLE_001");
+        // When
+        AIRecommendationResponse response = aiRecommendationService.generateClassificationRecommendation(request);
 
-        assertNotNull(result);
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getAssetId()).isEqualTo("ASSET-002");
     }
 
     @Test
-    void generateQualityImprovementRecommendation_shouldGenerateSuccessfully() {
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
+    @DisplayName("生成血缘补充建议")
+    void testGenerateLineageSuggestion() {
+        // Given
+        when(recommendationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AIRecommendation result = recommendationService.generateQualityImprovementRecommendation(
-                "TABLE_001", "COMPLETENESS", Map.of("score", 0.85));
+        // When
+        AIRecommendationResponse response = aiRecommendationService.generateLineageSuggestion("ASSET-001");
 
-        assertNotNull(result);
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
+        // Then
+        assertThat(response).isNotNull();
+        verify(recommendationRepository, times(1)).save(any());
     }
 
     @Test
-    void generateStandardMappingRecommendation_shouldGenerateSuccessfully() {
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
+    @DisplayName("分析数据质量问题根因")
+    void testAnalyzeRootCause() {
+        // Given
+        List<String> issues = List.of("数据缺失", "格式不一致", "重复记录");
+        when(recommendationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AIRecommendation result = recommendationService.generateStandardMappingRecommendation(
-                "COL_001", "NAMING_STANDARD");
+        // When
+        AIRecommendationResponse response = aiRecommendationService.analyzeRootCause("ASSET-001", issues);
 
-        assertNotNull(result);
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getRootCauseAnalysis()).isNotNull();
     }
 
     @Test
-    void generateLineageImpactRecommendation_shouldGenerateSuccessfully() {
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
+    @DisplayName("建议治理任务")
+    void testSuggestGovernanceTasks() {
+        // Given
+        when(taskRepository.findByTaskStatus("PENDING")).thenReturn(List.of(testTask));
+        when(taskRepository.findByTaskType("ORCHESTRATION")).thenReturn(List.of(testTask));
+        when(recommendationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AIRecommendation result = recommendationService.generateLineageImpactRecommendation(
-                "TABLE_001", "SCHEMA_CHANGE");
+        // When
+        AIRecommendationResponse response = aiRecommendationService.suggestGovernanceTasks("ASSET-001");
 
-        assertNotNull(result);
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getRecommendedTasks()).isNotNull();
     }
 
     @Test
-    void searchRecommendationsInVectorDb_shouldQuerySuccessfully() {
-        QueryResultsWrapper wrapper = mock(QueryResultsWrapper.class);
-        when(milvusClient.query(any(QueryParam.class))).thenReturn(wrapper);
-        when(wrapper.getResultFields()).thenReturn(Collections.emptyList());
+    @DisplayName("评估资产敏感等级")
+    void testAssessSensitivityLevel() {
+        // Given
+        when(recommendationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        List<List<Float>> result = recommendationService.searchRecommendationsInVectorDb(
-                "测试上下文", 5);
+        // When
+        AIRecommendationResponse response = aiRecommendationService.assessSensitivityLevel("ASSET-001", "用户信息表");
 
-        assertNotNull(result);
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getSensitivityLevel()).isNotNull();
     }
 
     @Test
-    void acceptRecommendation_shouldAcceptSuccessfully() {
-        when(recommendationRepository.findById(1L)).thenReturn(Optional.of(testRecommendation));
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
+    @DisplayName("生成数据资产健康报告")
+    void testGenerateHealthReport() {
+        // Given
+        when(taskRepository.findAll()).thenReturn(List.of(testTask));
+        when(recommendationRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Optional<AIRecommendation> result = recommendationService.acceptRecommendation(
-                1L, "user123");
+        // When
+        AIRecommendationResponse response = aiRecommendationService.generateHealthReport();
 
-        assertTrue(result.isPresent());
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getOverallHealthScore()).isNotNull();
     }
 
     @Test
-    void acceptRecommendation_shouldReturnEmptyWhenNotFound() {
-        when(recommendationRepository.findById(99L)).thenReturn(Optional.empty());
+    @DisplayName("获取AI推荐历史")
+    void testGetRecommendationHistory() {
+        // Given
+        when(recommendationRepository.findTop50ByOrderByCreatedTimeDesc()).thenReturn(new ArrayList<>());
 
-        Optional<AIRecommendation> result = recommendationService.acceptRecommendation(
-                99L, "user123");
+        // When
+        List<AIRecommendationResponse> history = aiRecommendationService.getRecommendationHistory();
 
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void rejectRecommendation_shouldRejectSuccessfully() {
-        when(recommendationRepository.findById(1L)).thenReturn(Optional.of(testRecommendation));
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
-
-        assertDoesNotThrow(() -> recommendationService.rejectRecommendation(
-                1L, "不适用当前场景"));
-
-        verify(recommendationRepository, times(1)).save(any(AIRecommendation.class));
-    }
-
-    @Test
-    void applyRecommendation_shouldApplySuccessfully() {
-        testRecommendation.setAccepted(true);
-        when(recommendationRepository.findById(1L)).thenReturn(Optional.of(testRecommendation));
-        when(recommendationRepository.save(any(AIRecommendation.class)))
-                .thenReturn(testRecommendation);
-
-        Map<String, Object> result = recommendationService.applyRecommendation(
-                1L, "user123");
-
-        assertNotNull(result);
-        assertTrue(result.containsKey("success"));
-    }
-
-    @Test
-    void recommendPoliciesForAsset_shouldReturnPolicies() {
-        when(recommendationRepository.findByTypeAndStatus(
-                eq("POLICY_SUGGESTION"), any(), any()))
-                .thenReturn(List.of(testRecommendation));
-
-        List<GovernancePolicy> results = recommendationService.recommendPoliciesForAsset(
-                "TABLE", "SALES", "TABLE_001");
-
-        assertNotNull(results);
-    }
-
-    @Test
-    void getRecommendationHistory_shouldReturnHistory() {
-        when(recommendationRepository.findByTypeOrderByCreatedAtDesc(
-                any(), any(), any()))
-                .thenReturn(List.of(testRecommendation));
-
-        List<AIRecommendation> results = recommendationService.getRecommendationHistory(
-                "POLICY_SUGGESTION", "GENERATED", 50);
-
-        assertNotNull(results);
-    }
-
-    @Test
-    void generateGovernanceSummary_shouldGenerateSummary() {
-        Map<String, Object> summary = recommendationService.generateGovernanceSummary(
-                "SALES", "weekly");
-
-        assertNotNull(summary);
-        assertTrue(summary.containsKey("totalRecommendations"));
-        assertTrue(summary.containsKey("acceptedRecommendations"));
-    }
-
-    @Test
-    void cleanupExpiredRecommendations_shouldDeleteExpired() {
-        when(recommendationRepository.deleteByExpiresAtBefore(any(LocalDateTime.class)))
-                .thenReturn(5);
-
-        int deleted = recommendationService.cleanupExpiredRecommendations();
-
-        assertEquals(5, deleted);
+        // Then
+        assertThat(history).isNotNull();
     }
 }

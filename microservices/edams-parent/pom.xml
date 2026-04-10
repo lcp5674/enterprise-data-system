@@ -55,6 +55,9 @@
         <module>edams-lifecycle</module>
         <module>edams-version</module>
         <module>edams-collaboration</module>
+        
+        <!-- AIOps智能运维服务 -->
+        <module>edams-aiops</module>
     </modules>
     
     <dependencyManagement>

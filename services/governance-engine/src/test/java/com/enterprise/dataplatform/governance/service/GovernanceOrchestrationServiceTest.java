@@ -1,35 +1,35 @@
 package com.enterprise.dataplatform.governance.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.enterprise.dataplatform.governance.domain.entity.GovernancePolicy;
 import com.enterprise.dataplatform.governance.domain.entity.GovernanceTask;
 import com.enterprise.dataplatform.governance.domain.entity.TaskExecution;
-import com.enterprise.dataplatform.governance.dto.request.GovernancePolicyRequest;
-import com.enterprise.dataplatform.governance.dto.request.GovernanceTaskRequest;
-import com.enterprise.dataplatform.governance.repository.GovernancePolicyRepository;
+import com.enterprise.dataplatform.governance.dto.request.TaskExecutionRequest;
+import com.enterprise.dataplatform.governance.dto.response.TaskExecutionResponse;
 import com.enterprise.dataplatform.governance.repository.GovernanceTaskRepository;
 import com.enterprise.dataplatform.governance.repository.TaskExecutionRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+/**
+ * GovernanceOrchestrationService 单元测试
+ */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("治理任务编排服务测试")
 class GovernanceOrchestrationServiceTest {
-
-    @Mock
-    private GovernancePolicyRepository policyRepository;
 
     @Mock
     private GovernanceTaskRepository taskRepository;
@@ -37,191 +37,258 @@ class GovernanceOrchestrationServiceTest {
     @Mock
     private TaskExecutionRepository executionRepository;
 
-    @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
-
     @InjectMocks
     private GovernanceOrchestrationService orchestrationService;
 
-    private GovernancePolicy testPolicy;
     private GovernanceTask testTask;
+    private TaskExecution testExecution;
 
     @BeforeEach
     void setUp() {
-        testPolicy = GovernancePolicy.builder()
-                .id(1L)
-                .name("测试策略")
-                .policyType("QUALITY_CHECK")
-                .assetType("TABLE")
-                .priority(1)
-                .enabled(true)
-                .createdAt(LocalDateTime.now())
-                .build();
-
         testTask = GovernanceTask.builder()
                 .id(1L)
+                .taskCode("TASK-001")
                 .taskName("测试任务")
-                .taskType("QUALITY_CHECK")
-                .policyId(1L)
-                .priority(1)
-                .status("PENDING")
-                .createdAt(LocalDateTime.now())
+                .taskType("ORCHESTRATION")
+                .taskStatus("PENDING")
+                .taskParams("{}")
+                .upstreamTasks(new ArrayList<>())
+                .downstreamTasks(new ArrayList<>())
+                .build();
+
+        testExecution = TaskExecution.builder()
+                .id(1L)
+                .batchNo("EXEC-12345678")
+                .task(testTask)
+                .taskCode(testTask.getTaskCode())
+                .taskName(testTask.getTaskName())
+                .taskType(testTask.getTaskType())
+                .executionStatus("RUNNING")
+                .startTime(LocalDateTime.now())
+                .executor("test-user")
                 .build();
     }
 
     @Test
-    void createPolicy_shouldCreatePolicySuccessfully() {
-        GovernancePolicyRequest request = GovernancePolicyRequest.builder()
-                .name("新策略")
-                .policyType("QUALITY_CHECK")
-                .assetType("TABLE")
-                .priority(2)
+    @DisplayName("执行任务 - 正常执行场景")
+    void testExecuteTask_Success() {
+        // Given
+        TaskExecutionRequest request = TaskExecutionRequest.builder()
+                .taskId(1L)
+                .executionParams("{}")
                 .build();
-
-        when(policyRepository.save(any(GovernancePolicy.class))).thenReturn(testPolicy);
-
-        GovernancePolicy result = orchestrationService.createPolicy(request);
-
-        assertNotNull(result);
-        assertEquals("测试策略", result.getName());
-        verify(policyRepository, times(1)).save(any(GovernancePolicy.class));
-    }
-
-    @Test
-    void updatePolicy_shouldUpdatePolicySuccessfully() {
-        GovernancePolicyRequest request = GovernancePolicyRequest.builder()
-                .name("更新后的策略")
-                .policyType("QUALITY_CHECK")
-                .assetType("TABLE")
-                .priority(1)
-                .build();
-
-        when(policyRepository.findById(1L)).thenReturn(Optional.of(testPolicy));
-        when(policyRepository.save(any(GovernancePolicy.class))).thenReturn(testPolicy);
-
-        GovernancePolicy result = orchestrationService.updatePolicy(1L, request);
-
-        assertNotNull(result);
-        verify(policyRepository, times(1)).save(any(GovernancePolicy.class));
-    }
-
-    @Test
-    void deletePolicy_shouldDeletePolicySuccessfully() {
-        when(policyRepository.findById(1L)).thenReturn(Optional.of(testPolicy));
-        doNothing().when(policyRepository).delete(any(GovernancePolicy.class));
-
-        assertDoesNotThrow(() -> orchestrationService.deletePolicy(1L));
-
-        verify(policyRepository, times(1)).delete(any(GovernancePolicy.class));
-    }
-
-    @Test
-    void getPolicyById_shouldReturnPolicyWhenExists() {
-        when(policyRepository.findById(1L)).thenReturn(Optional.of(testPolicy));
-
-        Optional<GovernancePolicy> result = orchestrationService.getPolicyById(1L);
-
-        assertTrue(result.isPresent());
-        assertEquals(testPolicy.getName(), result.get().getName());
-    }
-
-    @Test
-    void getPolicyById_shouldReturnEmptyWhenNotExists() {
-        when(policyRepository.findById(99L)).thenReturn(Optional.empty());
-
-        Optional<GovernancePolicy> result = orchestrationService.getPolicyById(99L);
-
-        assertFalse(result.isPresent());
-    }
-
-    @Test
-    void listPolicies_shouldReturnPagedResults() {
-        Page<GovernancePolicy> page = new Page<>(1, 10);
-        page.setRecords(List.of(testPolicy));
-        page.setTotal(1);
-
-        when(policyRepository.selectPage(any(Page.class), any(LambdaQueryWrapper.class)))
-                .thenReturn(page);
-
-        Page<GovernancePolicy> result = orchestrationService.listPolicies(
-                1, 10, null, null, null, null);
-
-        assertNotNull(result);
-        assertEquals(1, result.getTotal());
-        assertEquals(1, result.getRecords().size());
-    }
-
-    @Test
-    void createTask_shouldCreateTaskSuccessfully() {
-        GovernanceTaskRequest request = GovernanceTaskRequest.builder()
-                .taskName("新任务")
-                .taskType("QUALITY_CHECK")
-                .policyId(1L)
-                .priority(2)
-                .build();
-
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
+        when(executionRepository.save(any(TaskExecution.class))).thenAnswer(invocation -> {
+            TaskExecution saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        GovernanceTask result = orchestrationService.createTask(request);
+        // When
+        TaskExecutionResponse response = orchestrationService.executeTask(request, "test-executor");
 
-        assertNotNull(result);
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getTaskCode()).isEqualTo("TASK-001");
+        assertThat(response.getExecutionStatus()).isEqualTo("RUNNING");
+        verify(taskRepository, times(2)).save(any(GovernanceTask.class));
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("执行任务 - 任务不存在抛出异常")
+    void testExecuteTask_TaskNotFound() {
+        // Given
+        TaskExecutionRequest request = TaskExecutionRequest.builder()
+                .taskId(999L)
+                .executionParams("{}")
+                .build();
+        when(taskRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThatThrownBy(() -> orchestrationService.executeTask(request, "test-executor"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("任务不存在");
+    }
+
+    @Test
+    @DisplayName("异步执行任务 - 执行成功场景")
+    void testExecuteTaskAsync_Success() {
+        // Given
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
         verify(taskRepository, times(1)).save(any(GovernanceTask.class));
     }
 
     @Test
-    void executeTask_shouldExecuteTaskSuccessfully() {
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
-        when(executionRepository.save(any(TaskExecution.class)))
-                .thenAnswer(invocation -> {
-                    TaskExecution exec = invocation.getArgument(0);
-                    exec.setId(1L);
-                    return exec;
-                });
-        when(UUID.randomUUID()).thenReturn(new UUID(0, 1));
+    @DisplayName("异步执行任务 - 执行记录不存在")
+    void testExecuteTaskAsync_ExecutionNotFound() {
+        // Given
+        when(executionRepository.findById(999L)).thenReturn(Optional.empty());
 
-        String executionId = orchestrationService.executeTask(1L);
+        // When
+        orchestrationService.executeTaskAsync(999L);
 
-        assertNotNull(executionId);
-        verify(kafkaTemplate, times(1)).send(anyString(), anyString(), any());
+        // Then
+        verify(executionRepository, never()).save(any(TaskExecution.class));
     }
 
     @Test
-    void cancelTask_shouldCancelTaskSuccessfully() {
+    @DisplayName("异步执行任务 - 执行失败场景")
+    void testExecuteTaskAsync_Failure() {
+        // Given
+        testTask.setTaskType("UNKNOWN_TYPE");
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("更新任务为失败状态")
+    void testUpdateTaskToFailed() {
+        // Given
         when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        Optional<GovernanceTask> result = orchestrationService.cancelTask(1L);
+        // When
+        orchestrationService.updateTaskToFailed(1L, "Test error message");
 
-        assertTrue(result.isPresent());
+        // Then
         verify(taskRepository, times(1)).save(any(GovernanceTask.class));
     }
 
     @Test
-    void getPendingTasks_shouldReturnPendingTasks() {
-        when(taskRepository.findByStatus("PENDING")).thenReturn(List.of(testTask));
+    @DisplayName("查询执行记录 - 正常查询")
+    void testGetExecution_Success() {
+        // Given
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
 
-        List<GovernanceTask> result = orchestrationService.getPendingTasks(null, 50);
+        // When
+        TaskExecutionResponse response = orchestrationService.getExecution(1L);
 
-        assertNotNull(result);
-        assertEquals(1, result.size());
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getBatchNo()).isEqualTo("EXEC-12345678");
     }
 
     @Test
-    void updatePolicyStatus_shouldUpdateStatusSuccessfully() {
-        when(policyRepository.findById(1L)).thenReturn(Optional.of(testPolicy));
-        when(policyRepository.save(any(GovernancePolicy.class))).thenReturn(testPolicy);
+    @DisplayName("查询执行记录 - 记录不存在抛出异常")
+    void testGetExecution_NotFound() {
+        // Given
+        when(executionRepository.findById(999L)).thenReturn(Optional.empty());
 
-        GovernancePolicy result = orchestrationService.updatePolicyStatus(1L, false);
-
-        assertNotNull(result);
-        verify(policyRepository, times(1)).save(any(GovernancePolicy.class));
+        // When & Then
+        assertThatThrownBy(() -> orchestrationService.getExecution(999L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("执行记录不存在");
     }
 
     @Test
-    void getAvailablePolicyTypes_shouldReturnTypeList() {
-        List<Map<String, Object>> types = orchestrationService.getAvailablePolicyTypes();
+    @DisplayName("批量执行任务 - 多任务执行")
+    void testBatchExecuteTasks() {
+        // Given
+        GovernanceTask task2 = GovernanceTask.builder()
+                .id(2L)
+                .taskCode("TASK-002")
+                .taskName("测试任务2")
+                .taskType("NOTIFICATION")
+                .taskStatus("PENDING")
+                .upstreamTasks(new ArrayList<>())
+                .downstreamTasks(new ArrayList<>())
+                .build();
 
-        assertNotNull(types);
-        assertFalse(types.isEmpty());
+        List<Long> taskIds = List.of(1L, 2L);
+        when(taskRepository.findAllById(taskIds)).thenReturn(List.of(testTask, task2));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
+        when(taskRepository.findById(2L)).thenReturn(Optional.of(task2));
+        when(executionRepository.save(any(TaskExecution.class))).thenAnswer(invocation -> {
+            TaskExecution saved = invocation.getArgument(0);
+            saved.setId(1L);
+            return saved;
+        });
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        List<TaskExecutionResponse> responses = orchestrationService.batchExecuteTasks(taskIds, "batch-executor");
+
+        // Then
+        assertThat(responses).isNotNull();
+        verify(taskRepository, atLeast(2)).findById(any());
+    }
+
+    @Test
+    @DisplayName("执行编排类型任务")
+    void testExecuteOrchestrationTask() {
+        // Given
+        testTask.setTaskType("ORCHESTRATION");
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then - 验证任务执行完成
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("执行通知类型任务")
+    void testExecuteNotificationTask() {
+        // Given
+        testTask.setTaskType("NOTIFICATION");
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("执行报告类型任务")
+    void testExecuteReportingTask() {
+        // Given
+        testTask.setTaskType("REPORTING");
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("执行自动修复类型任务")
+    void testExecuteAutoRemediationTask() {
+        // Given
+        testTask.setTaskType("AUTO_REMEDIATION");
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        // When
+        orchestrationService.executeTaskAsync(1L);
+
+        // Then
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
     }
 }

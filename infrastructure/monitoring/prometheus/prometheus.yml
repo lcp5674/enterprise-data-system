@@ -18,6 +18,7 @@ global:
 rule_files:
   - "rules/alerts.yml"
   - "rules/recording.yml"
+  - "rules/compliance-alerts.yml"
 
 # 告警配置
 alerting:
@@ -318,6 +319,20 @@ scrape_configs:
           service: 'lineage-service'
           environment: 'production'
           metric_type: 'business'
+      
+      # 合规服务监控
+      - targets: ['edams-compliance.edams-prod.svc.cluster.local:8080']
+        labels:
+          service: 'compliance-service'
+          environment: 'production'
+          metric_type: 'compliance'
+      
+      # 数据脱敏服务监控
+      - targets: ['edams-data-masking.edams-prod.svc.cluster.local:8080']
+        labels:
+          service: 'data-masking-service'
+          environment: 'production'
+          metric_type: 'compliance'
 
   # Blackbox exporter - HTTP健康检查
   - job_name: 'blackbox-http'

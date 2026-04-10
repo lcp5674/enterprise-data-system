@@ -1,0 +1,91 @@
+{
+  "datasources": [
+    {
+      "id": 1,
+      "name": "Production MySQL",
+      "type": "MYSQL",
+      "connectionUrl": "jdbc:mysql://prod-db:3306/production",
+      "username": "prod_user",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 2,
+      "name": "Data Warehouse PostgreSQL",
+      "type": "POSTGRESQL",
+      "connectionUrl": "jdbc:postgresql://dw-db:5432/warehouse",
+      "username": "dw_user",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 3,
+      "name": "Legacy Oracle DB",
+      "type": "ORACLE",
+      "connectionUrl": "jdbc:oracle:thin:@legacy-db:1521:ORCL",
+      "username": "legacy_user",
+      "status": "INACTIVE"
+    }
+  ],
+  "dataAssets": [
+    {
+      "id": 1,
+      "name": "Customer Master Data",
+      "type": "TABLE",
+      "datasourceId": 1,
+      "schemaName": "crm",
+      "tableName": "customers",
+      "description": "Core customer information table",
+      "owner": "data-steward-1",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 2,
+      "name": "Order Transactions",
+      "type": "TABLE",
+      "datasourceId": 1,
+      "schemaName": "sales",
+      "tableName": "orders",
+      "description": "Sales order transaction records",
+      "owner": "data-steward-2",
+      "status": "PUBLISHED"
+    },
+    {
+      "id": 3,
+      "name": "Product Catalog",
+      "type": "VIEW",
+      "datasourceId": 2,
+      "schemaName": "products",
+      "tableName": "product_catalog_vw",
+      "description": "Consolidated product information view",
+      "owner": "data-steward-1",
+      "status": "DRAFT"
+    }
+  ],
+  "dataCatalogs": [
+    {
+      "id": 1,
+      "name": "Customer Domain",
+      "description": "All customer-related data assets",
+      "owner": "customer-team",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 2,
+      "name": "Sales Domain",
+      "description": "Sales and order data assets",
+      "owner": "sales-team",
+      "status": "ACTIVE"
+    },
+    {
+      "id": 3,
+      "name": "Product Domain",
+      "description": "Product and inventory data",
+      "owner": "product-team",
+      "status": "ACTIVE"
+    }
+  ],
+  "catalogAssets": [
+    {"catalogId": 1, "assetId": 1},
+    {"catalogId": 2, "assetId": 2},
+    {"catalogId": 3, "assetId": 3}
+  ]
+}

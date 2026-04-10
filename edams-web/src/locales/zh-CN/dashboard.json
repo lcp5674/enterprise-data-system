@@ -1,0 +1,46 @@
+{
+  "title": "工作台",
+  "welcome": "欢迎回来，{{name}}！",
+  "today": "今日",
+  "thisWeek": "本周",
+  "thisMonth": "本月",
+  "totalAssets": "资产总数",
+  "totalUsers": "用户总数",
+  "recentActivities": "最近活动",
+  "assetStats": "资产统计",
+  "qualityStats": "质量统计",
+  "systemStats": "系统统计",
+  "viewAll": "查看全部",
+  "noActivities": "暂无活动记录",
+  "assetType": {
+    "database": "数据库",
+    "table": "数据表",
+    "file": "文件",
+    "api": "API",
+    "report": "报表"
+  },
+  "qualityLevel": {
+    "excellent": "优秀",
+    "good": "良好", 
+    "fair": "一般",
+    "poor": "较差",
+    "critical": "严重"
+  },
+  "quickActions": {
+    "title": "快捷操作",
+    "addAsset": "添加资产",
+    "qualityCheck": "质量检查",
+    "generateReport": "生成报告",
+    "systemConfig": "系统配置"
+  },
+  "alerts": {
+    "title": "系统提醒",
+    "noAlerts": "暂无系统提醒",
+    "pendingApproval": "待审批{{count}}项",
+    "attentionNeeded": "需要关注{{count}}项"
+  },
+  "recentDocs": {
+    "title": "最近文档",
+    "noDocs": "暂无最近文档"
+  }
+}

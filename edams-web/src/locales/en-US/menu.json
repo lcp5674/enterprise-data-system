@@ -1,0 +1,44 @@
+{
+  "dashboard": "Dashboard",
+  "asset": {
+    "title": "Asset Management",
+    "list": "Asset List",
+    "favorites": "My Favorites",
+    "create": "Register Asset",
+    "detail": "Asset Details"
+  },
+  "catalog": {
+    "title": "Data Catalog",
+    "tree": "Catalog Tree",
+    "domain": "Business Domain"
+  },
+  "lineage": {
+    "title": "Data Lineage",
+    "graph": "Lineage Graph",
+    "impact": "Impact Analysis"
+  },
+  "quality": {
+    "title": "Quality Management",
+    "overview": "Quality Overview",
+    "rules": "Quality Rules",
+    "issues": "Issue Tracking",
+    "reports": "Quality Reports"
+  },
+  "system": {
+    "title": "System Management",
+    "users": "User Management",
+    "roles": "Role Permissions",
+    "datasources": "DataSource Configuration",
+    "settings": "System Settings",
+    "notifications": "Notification Management"
+  },
+  "user": {
+    "login": "Login",
+    "register": "Register",
+    "forgotPassword": "Forgot Password",
+    "resetPassword": "Reset Password",
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Logout"
+  }
+}

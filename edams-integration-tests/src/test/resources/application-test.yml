@@ -1,0 +1,66 @@
+# 集成测试配置文件
+spring:
+  application:
+    name: edams-integration-tests
+
+  # 数据源配置（由Testcontainers动态注入）
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Neo4j配置（由Testcontainers动态注入）
+  neo4j:
+    authentication:
+      username: neo4j
+
+  # Redis配置（由Testcontainers动态注入）
+  redis:
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  # Kafka配置（由Testcontainers动态注入）
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.edams.integration: DEBUG
+    org.springframework.test: INFO
+    org.testcontainers: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 测试特定配置
+test:
+  containers:
+    startup-timeout: 120
+    shutdown-timeout: 60

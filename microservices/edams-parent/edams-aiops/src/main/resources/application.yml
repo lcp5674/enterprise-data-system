@@ -1,0 +1,147 @@
+server:
+  port: 8086
+  servlet:
+    context-path: /aiops
+
+spring:
+  application:
+    name: edams-aiops
+  
+  # PostgreSQL数据源
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:edams_aiops}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # Redis配置
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 3000ms
+  
+  # Prometheus配置
+  prometheus:
+    url: ${PROMETHEUS_URL:http://localhost:9090}
+    query-api: /api/v1/query_range
+  
+  # Neo4j配置
+  neo4j:
+    uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_PORT:7687}
+    username: ${NEO4J_USERNAME:neo4j}
+    password: ${NEO4J_PASSWORD:neo4j}
+  
+  # Flyway数据库迁移
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.aiops.model
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: assign_uuid
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Spring Cloud配置
+spring.cloud:
+  nacos:
+    discovery:
+      enabled: true
+      server-addr: ${NACOS_SERVER:localhost:8848}
+      namespace: ${NACOS_NAMESPACE:public}
+  consul:
+    discovery:
+      enabled: false
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# OpenAPI文档配置
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# AIOps特定配置
+aiops:
+  # 异常检测配置
+  anomaly:
+    detection:
+      confidence-threshold: 0.8
+      sigma-threshold: 3.0
+      window-size: 5
+      deviation-threshold: 0.5
+  
+  # 容量规划配置
+  capacity:
+    forecast:
+      default-days: 30
+      confidence-level: 0.85
+      exhaustion-threshold: 0.8
+      scale-up-threshold: 0.7
+      scale-up-buffer: 0.3
+  
+  # 告警优化配置
+  alert:
+    optimization:
+      aggregation-window-minutes: 5
+      max-alerts-per-window: 100
+      priority-threshold: MEDIUM
+  
+  # 缓存配置
+  cache:
+    metrics-ttl-minutes: 5
+    anomaly-ttl-hours: 1
+    capacity-ttl-hours: 1
+    rca-ttl-minutes: 30
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.edams.aiops: DEBUG
+    org.springframework.data.redis: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

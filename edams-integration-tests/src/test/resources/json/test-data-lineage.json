@@ -1,0 +1,59 @@
+{
+  "lineageRelations": [
+    {
+      "id": "rel-001",
+      "sourceAssetId": "asset-001",
+      "targetAssetId": "asset-002",
+      "relationType": "DEPENDS_ON",
+      "properties": {
+        "dependencyType": "FOREIGN_KEY",
+        "createdAt": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "id": "rel-002",
+      "sourceAssetId": "asset-002",
+      "targetAssetId": "asset-003",
+      "relationType": "TRANSFORMS_TO",
+      "properties": {
+        "transformationType": "ETL",
+        "jobName": "daily_etl_job"
+      }
+    },
+    {
+      "id": "rel-003",
+      "sourceAssetId": "asset-003",
+      "targetAssetId": "asset-004",
+      "relationType": "AGGREGATES_TO",
+      "properties": {
+        "aggregationType": "SUMMARIZE"
+      }
+    }
+  ],
+  "dataAssets": [
+    {
+      "id": "asset-001",
+      "name": "Raw Customer Data",
+      "type": "TABLE",
+      "layer": "ODS"
+    },
+    {
+      "id": "asset-002",
+      "name": "Cleaned Customer Data",
+      "type": "TABLE",
+      "layer": "DWD"
+    },
+    {
+      "id": "asset-003",
+      "name": "Customer Summary",
+      "type": "TABLE",
+      "layer": "DWS"
+    },
+    {
+      "id": "asset-004",
+      "name": "Customer Report",
+      "type": "VIEW",
+      "layer": "ADS"
+    }
+  ]
+}

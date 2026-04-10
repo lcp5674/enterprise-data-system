@@ -1,18 +1,21 @@
 package com.enterprise.edams.datasource.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.enterprise.edams.datasource.constant.DatasourceStatus;
 import com.enterprise.edams.datasource.constant.DatasourceType;
 import com.enterprise.edams.datasource.constant.HealthStatus;
+import com.enterprise.edams.datasource.connector.DatasourceConnector;
+import com.enterprise.edams.datasource.connector.DatasourceConnectorFactory;
 import com.enterprise.edams.datasource.dto.*;
 import com.enterprise.edams.datasource.entity.DatasourceConfig;
 import com.enterprise.edams.datasource.exception.DatasourceException;
+import com.enterprise.edams.datasource.repository.DatasourceConfigRepository;
 import com.enterprise.edams.datasource.service.impl.DatasourceConfigServiceImpl;
 import com.enterprise.edams.datasource.vo.DatasourceDetailVO;
+import com.enterprise.edams.datasource.vo.DatasourceStatisticsVO;
 import com.enterprise.edams.datasource.vo.DatasourceVO;
-import com.enterprise.edams.datasource.repository.DatasourceConfigRepository;
-import com.enterprise.edams.datasource.connector.DatasourceConnector;
-import com.enterprise.edams.datasource.connector.DatasourceConnectorFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,15 +26,20 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
- * 数据源配置服务单元测试
+ * DatasourceConfigService 单元测试
  */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("数据源配置服务测试")
 class DatasourceConfigServiceTest {
 
     @Mock
@@ -41,117 +49,115 @@ class DatasourceConfigServiceTest {
     private DatasourceConnectorFactory connectorFactory;
 
     @Mock
-    private DatasourceConnector connector;
+    private DatasourceConnector datasourceConnector;
 
     @InjectMocks
     private DatasourceConfigServiceImpl datasourceConfigService;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
-
+    private ObjectMapper objectMapper;
     private DatasourceConfig testConfig;
     private CreateDatasourceRequest createRequest;
+    private UpdateDatasourceRequest updateRequest;
 
     @BeforeEach
-    void setUp() {
-        // 创建测试数据源配置
+    void setUp() throws Exception {
+        objectMapper = new ObjectMapper();
+        objectMapper.findAndRegisterModules();
+
+        // 使用反射注入objectMapper
+        var field = DatasourceConfigServiceImpl.class.getDeclaredField("objectMapper");
+        field.setAccessible(true);
+        field.set(datasourceConfigService, objectMapper);
+
         testConfig = new DatasourceConfig();
         testConfig.setId(1L);
+        testConfig.setCode("DS-001");
         testConfig.setName("测试数据源");
-        testConfig.setCode("TEST_DS");
-        testConfig.setDatasourceType(DatasourceType.MYSQL.name());
+        testConfig.setDatasourceType("MYSQL");
         testConfig.setHost("localhost");
         testConfig.setPort(3306);
         testConfig.setDatabaseName("test_db");
         testConfig.setUsername("root");
         testConfig.setPasswordEnc("encrypted_password");
-        testConfig.setStatus(DatasourceStatus.ACTIVE.name());
-        testConfig.setHealthStatus(HealthStatus.HEALTHY.name());
-        testConfig.setSyncEnabled(1);
-        testConfig.setSyncInterval(60);
+        testConfig.setStatus(DatasourceStatus.INACTIVE.name());
+        testConfig.setHealthStatus(HealthStatus.UNKNOWN.name());
+        testConfig.setSyncEnabled(0);
         testConfig.setCreatedBy("system");
-        testConfig.setCreatedTime(LocalDateTime.now());
-        testConfig.setUpdatedTime(LocalDateTime.now());
+        testConfig.setCreateTime(LocalDateTime.now());
         testConfig.setDeleted(0);
 
-        // 创建请求对象
         createRequest = new CreateDatasourceRequest();
+        createRequest.setCode("DS-001");
         createRequest.setName("测试数据源");
-        createRequest.setCode("TEST_DS");
-        createRequest.setDatasourceType(DatasourceType.MYSQL.name());
+        createRequest.setDatasourceType("MYSQL");
         createRequest.setHost("localhost");
         createRequest.setPort(3306);
         createRequest.setDatabaseName("test_db");
         createRequest.setUsername("root");
         createRequest.setPassword("password");
+        createRequest.setSyncEnabled(false);
+
+        updateRequest = new UpdateDatasourceRequest();
+        updateRequest.setName("更新后的数据源");
+        updateRequest.setDescription("更新描述");
     }
 
     @Test
-    @DisplayName("创建数据源配置成功")
+    @DisplayName("创建数据源 - 成功")
     void testCreateDatasource_Success() {
         // Given
-        when(datasourceConfigRepository.selectByCode("TEST_DS")).thenReturn(null);
+        when(datasourceConfigRepository.selectByCode("DS-001")).thenReturn(null);
         when(datasourceConfigRepository.insert(any(DatasourceConfig.class))).thenReturn(1);
 
         // When
         Long id = datasourceConfigService.createDatasource(createRequest);
 
         // Then
-        assertNotNull(id);
-        verify(datasourceConfigRepository).insert(any(DatasourceConfig.class));
+        assertThat(id).isEqualTo(1L);
+        verify(datasourceConfigRepository, times(1)).insert(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("创建数据源配置失败-编码重复")
+    @DisplayName("创建数据源 - 编码已存在")
     void testCreateDatasource_DuplicateCode() {
         // Given
-        when(datasourceConfigRepository.selectByCode("TEST_DS")).thenReturn(testConfig);
+        when(datasourceConfigRepository.selectByCode("DS-001")).thenReturn(testConfig);
 
         // When & Then
-        assertThrows(DatasourceException.class, () -> {
-            datasourceConfigService.createDatasource(createRequest);
-        });
-
-        verify(datasourceConfigRepository, never()).insert(any());
+        assertThatThrownBy(() -> datasourceConfigService.createDatasource(createRequest))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源编码已存在");
     }
 
     @Test
-    @DisplayName("更新数据源配置成功")
+    @DisplayName("更新数据源 - 成功")
     void testUpdateDatasource_Success() {
         // Given
         when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
         when(datasourceConfigRepository.updateById(any(DatasourceConfig.class))).thenReturn(true);
 
-        UpdateDatasourceRequest updateRequest = new UpdateDatasourceRequest();
-        updateRequest.setName("更新后的数据源");
-        updateRequest.setHost("192.168.1.1");
-
         // When
         boolean result = datasourceConfigService.updateDatasource(1L, updateRequest);
 
         // Then
-        assertTrue(result);
-        verify(datasourceConfigRepository).updateById(any(DatasourceConfig.class));
+        assertThat(result).isTrue();
+        verify(datasourceConfigRepository, times(1)).updateById(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("更新数据源配置失败-数据源不存在")
+    @DisplayName("更新数据源 - 数据源不存在")
     void testUpdateDatasource_NotFound() {
         // Given
-        when(datasourceConfigRepository.selectById(1L)).thenReturn(null);
-
-        UpdateDatasourceRequest updateRequest = new UpdateDatasourceRequest();
-        updateRequest.setName("更新后的数据源");
+        when(datasourceConfigRepository.selectById(999L)).thenReturn(null);
 
         // When & Then
-        assertThrows(DatasourceException.class, () -> {
-            datasourceConfigService.updateDatasource(1L, updateRequest);
-        });
-
-        verify(datasourceConfigRepository, never()).updateById(any());
+        assertThatThrownBy(() -> datasourceConfigService.updateDatasource(999L, updateRequest))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源不存在");
     }
 
     @Test
-    @DisplayName("删除数据源配置成功")
+    @DisplayName("删除数据源 - 成功（逻辑删除）")
     void testDeleteDatasource_Success() {
         // Given
         when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
@@ -161,31 +167,77 @@ class DatasourceConfigServiceTest {
         boolean result = datasourceConfigService.deleteDatasource(1L);
 
         // Then
-        assertTrue(result);
-        verify(datasourceConfigRepository).updateById(any(DatasourceConfig.class));
+        assertThat(result).isTrue();
+        verify(datasourceConfigRepository, times(1)).updateById(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("获取数据源详情成功")
+    @DisplayName("删除数据源 - 数据源不存在")
+    void testDeleteDatasource_NotFound() {
+        // Given
+        when(datasourceConfigRepository.selectById(999L)).thenReturn(null);
+
+        // When & Then
+        assertThatThrownBy(() -> datasourceConfigService.deleteDatasource(999L))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源不存在");
+    }
+
+    @Test
+    @DisplayName("获取数据源详情 - 成功")
     void testGetDatasourceDetail_Success() {
         // Given
         when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
 
         // When
-        DatasourceDetailVO detail = datasourceConfigService.getDatasourceDetail(1L);
+        DatasourceDetailVO result = datasourceConfigService.getDatasourceDetail(1L);
 
         // Then
-        assertNotNull(detail);
-        assertEquals("测试数据源", detail.getName());
-        assertEquals("TEST_DS", detail.getCode());
-        assertEquals(DatasourceType.MYSQL.name(), detail.getDatasourceType());
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(1L);
+        assertThat(result.getCode()).isEqualTo("DS-001");
     }
 
     @Test
-    @DisplayName("启用数据源成功")
+    @DisplayName("获取数据源详情 - 数据源不存在")
+    void testGetDatasourceDetail_NotFound() {
+        // Given
+        when(datasourceConfigRepository.selectById(999L)).thenReturn(null);
+
+        // When & Then
+        assertThatThrownBy(() -> datasourceConfigService.getDatasourceDetail(999L))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源不存在");
+    }
+
+    @Test
+    @DisplayName("分页查询数据源列表")
+    void testListDatasources() {
+        // Given
+        DatasourceQueryDTO query = new DatasourceQueryDTO();
+        query.setPageNum(1);
+        query.setPageSize(10);
+
+        Page<DatasourceConfig> page = new Page<>(1, 10);
+        Page<DatasourceConfig> resultPage = new Page<>(1, 10);
+        resultPage.setRecords(List.of(testConfig));
+        resultPage.setTotal(1);
+
+        when(datasourceConfigRepository.selectPageList(any(Page.class), any(DatasourceQueryDTO.class)))
+                .thenReturn(resultPage);
+
+        // When
+        IPage<DatasourceVO> result = datasourceConfigService.listDatasources(query);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getRecords()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("启用数据源 - 成功")
     void testEnableDatasource_Success() {
         // Given
-        testConfig.setStatus(DatasourceStatus.INACTIVE.name());
         when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
         when(datasourceConfigRepository.updateById(any(DatasourceConfig.class))).thenReturn(true);
 
@@ -193,15 +245,26 @@ class DatasourceConfigServiceTest {
         boolean result = datasourceConfigService.enableDatasource(1L);
 
         // Then
-        assertTrue(result);
-        verify(datasourceConfigRepository).updateById(any(DatasourceConfig.class));
+        assertThat(result).isTrue();
+        verify(datasourceConfigRepository, times(1)).updateById(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("禁用数据源成功")
+    @DisplayName("启用数据源 - 数据源不存在")
+    void testEnableDatasource_NotFound() {
+        // Given
+        when(datasourceConfigRepository.selectById(999L)).thenReturn(null);
+
+        // When & Then
+        assertThatThrownBy(() -> datasourceConfigService.enableDatasource(999L))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源不存在");
+    }
+
+    @Test
+    @DisplayName("禁用数据源 - 成功")
     void testDisableDatasource_Success() {
         // Given
-        testConfig.setStatus(DatasourceStatus.ACTIVE.name());
         when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
         when(datasourceConfigRepository.updateById(any(DatasourceConfig.class))).thenReturn(true);
 
@@ -209,87 +272,166 @@ class DatasourceConfigServiceTest {
         boolean result = datasourceConfigService.disableDatasource(1L);
 
         // Then
-        assertTrue(result);
-        verify(datasourceConfigRepository).updateById(any(DatasourceConfig.class));
+        assertThat(result).isTrue();
+        verify(datasourceConfigRepository, times(1)).updateById(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("测试连接成功")
-    void testConnection_Success() {
+    @DisplayName("测试数据源连接 - 成功")
+    void testTestConnection_Success() {
         // Given
         ConnectionTestRequest request = new ConnectionTestRequest();
-        request.setDatasourceType(DatasourceType.MYSQL.name());
+        request.setDatasourceType("MYSQL");
         request.setHost("localhost");
         request.setPort(3306);
 
-        when(connectorFactory.getConnector(DatasourceType.MYSQL.name())).thenReturn(connector);
-        when(connector.testConnection(request)).thenReturn(true);
+        when(connectorFactory.getConnector("MYSQL")).thenReturn(datasourceConnector);
+        when(datasourceConnector.testConnection(any(ConnectionTestRequest.class))).thenReturn(true);
 
         // When
-        ConnectionTestResponse response = datasourceConfigService.testConnection(request);
+        ConnectionTestResponse result = datasourceConfigService.testConnection(request);
 
         // Then
-        assertTrue(response.getSuccess());
-        assertEquals("连接成功", response.getMessage());
+        assertThat(result).isNotNull();
+        assertThat(result.getSuccess()).isTrue();
+        assertThat(result.getMessage()).isEqualTo("连接成功");
     }
 
     @Test
-    @DisplayName("测试连接失败")
-    void testConnection_Failed() {
+    @DisplayName("测试数据源连接 - 失败")
+    void testTestConnection_Failure() {
         // Given
         ConnectionTestRequest request = new ConnectionTestRequest();
-        request.setDatasourceType(DatasourceType.MYSQL.name());
+        request.setDatasourceType("MYSQL");
         request.setHost("invalid-host");
         request.setPort(3306);
 
-        when(connectorFactory.getConnector(DatasourceType.MYSQL.name())).thenReturn(connector);
-        when(connector.testConnection(request)).thenThrow(new RuntimeException("Connection refused"));
+        when(connectorFactory.getConnector("MYSQL")).thenReturn(datasourceConnector);
+        when(datasourceConnector.testConnection(any(ConnectionTestRequest.class)))
+                .thenThrow(new RuntimeException("Connection refused"));
 
         // When
-        ConnectionTestResponse response = datasourceConfigService.testConnection(request);
+        ConnectionTestResponse result = datasourceConfigService.testConnection(request);
 
         // Then
-        assertFalse(response.getSuccess());
-        assertNotNull(response.getErrorDetail());
+        assertThat(result).isNotNull();
+        assertThat(result.getSuccess()).isFalse();
+        assertThat(result.getMessage()).contains("连接失败");
     }
 
     @Test
-    @DisplayName("编码唯一性验证-唯一")
-    void testIsCodeUnique_Unique() {
+    @DisplayName("测试已有数据源连接 - 成功")
+    void testTestDatasourceConnection_Success() {
         // Given
-        when(datasourceConfigRepository.selectByCode("NEW_CODE")).thenReturn(null);
+        when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
+        when(connectorFactory.getConnector("MYSQL")).thenReturn(datasourceConnector);
+        when(datasourceConnector.testConnection(any(ConnectionTestRequest.class))).thenReturn(true);
+        when(datasourceConfigRepository.updateById(any(DatasourceConfig.class))).thenReturn(true);
 
         // When
-        boolean unique = datasourceConfigService.isCodeUnique("NEW_CODE");
+        ConnectionTestResponse result = datasourceConfigService.testDatasourceConnection(1L);
 
         // Then
-        assertTrue(unique);
+        assertThat(result).isNotNull();
+        assertThat(result.getSuccess()).isTrue();
+        verify(datasourceConfigRepository, times(1)).updateById(any(DatasourceConfig.class));
     }
 
     @Test
-    @DisplayName("编码唯一性验证-不唯一")
-    void testIsCodeUnique_NotUnique() {
+    @DisplayName("测试已有数据源连接 - 数据源不存在")
+    void testTestDatasourceConnection_NotFound() {
         // Given
-        when(datasourceConfigRepository.selectByCode("TEST_DS")).thenReturn(testConfig);
+        when(datasourceConfigRepository.selectById(999L)).thenReturn(null);
 
-        // When
-        boolean unique = datasourceConfigService.isCodeUnique("TEST_DS");
-
-        // Then
-        assertFalse(unique);
+        // When & Then
+        assertThatThrownBy(() -> datasourceConfigService.testDatasourceConnection(999L))
+                .isInstanceOf(DatasourceException.class)
+                .hasMessageContaining("数据源不存在");
     }
 
     @Test
-    @DisplayName("根据编码获取数据源")
-    void testGetByCode() {
+    @DisplayName("获取数据源统计信息")
+    void testGetStatistics() {
         // Given
-        when(datasourceConfigRepository.selectByCode("TEST_DS")).thenReturn(testConfig);
+        when(datasourceConfigRepository.countByType(anyString())).thenReturn(5L);
+        when(datasourceConfigRepository.countByStatus(anyString())).thenReturn(3L);
+        when(datasourceConfigRepository.countByHealthStatus(anyString())).thenReturn(2L);
+        when(datasourceConfigRepository.selectCount(any(LambdaQueryWrapper.class))).thenReturn(10L);
+        when(datasourceConfigRepository.selectCount(any(LambdaQueryWrapper.class))).thenReturn(5L);
 
         // When
-        DatasourceConfig config = datasourceConfigService.getByCode("TEST_DS");
+        DatasourceStatisticsVO result = datasourceConfigService.getStatistics();
 
         // Then
-        assertNotNull(config);
-        assertEquals("TEST_DS", config.getCode());
+        assertThat(result).isNotNull();
+        assertThat(result.getTotalCount()).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("根据编码获取数据源 - 成功")
+    void testGetByCode_Success() {
+        // Given
+        when(datasourceConfigRepository.selectByCode("DS-001")).thenReturn(testConfig);
+
+        // When
+        DatasourceConfig result = datasourceConfigService.getByCode("DS-001");
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getCode()).isEqualTo("DS-001");
+    }
+
+    @Test
+    @DisplayName("根据编码获取数据源 - 不存在")
+    void testGetByCode_NotFound() {
+        // Given
+        when(datasourceConfigRepository.selectByCode("NON-EXISTENT")).thenReturn(null);
+
+        // When
+        DatasourceConfig result = datasourceConfigService.getByCode("NON-EXISTENT");
+
+        // Then
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("批量获取数据源")
+    void testListByCodes() {
+        // Given
+        List<String> codes = List.of("DS-001", "DS-002");
+        when(datasourceConfigRepository.selectByCodes(codes)).thenReturn(List.of(testConfig));
+
+        // When
+        List<DatasourceConfig> result = datasourceConfigService.listByCodes(codes);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("验证编码唯一性 - 唯一")
+    void testIsCodeUnique_True() {
+        // Given
+        when(datasourceConfigRepository.selectByCode("UNIQUE-CODE")).thenReturn(null);
+
+        // When
+        boolean result = datasourceConfigService.isCodeUnique("UNIQUE-CODE");
+
+        // Then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("验证编码唯一性 - 不唯一")
+    void testIsCodeUnique_False() {
+        // Given
+        when(datasourceConfigRepository.selectByCode("DS-001")).thenReturn(testConfig);
+
+        // When
+        boolean result = datasourceConfigService.isCodeUnique("DS-001");
+
+        // Then
+        assertThat(result).isFalse();
     }
 }

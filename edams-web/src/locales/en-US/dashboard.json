@@ -1,0 +1,46 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome back, {{name}}!",
+  "today": "Today",
+  "thisWeek": "This Week",
+  "thisMonth": "This Month",
+  "totalAssets": "Total Assets",
+  "totalUsers": "Total Users",
+  "recentActivities": "Recent Activities",
+  "assetStats": "Asset Statistics",
+  "qualityStats": "Quality Statistics",
+  "systemStats": "System Statistics",
+  "viewAll": "View All",
+  "noActivities": "No activities yet",
+  "assetType": {
+    "database": "Database",
+    "table": "Table",
+    "file": "File",
+    "api": "API",
+    "report": "Report"
+  },
+  "qualityLevel": {
+    "excellent": "Excellent",
+    "good": "Good",
+    "fair": "Fair",
+    "poor": "Poor",
+    "critical": "Critical"
+  },
+  "quickActions": {
+    "title": "Quick Actions",
+    "addAsset": "Add Asset",
+    "qualityCheck": "Quality Check",
+    "generateReport": "Generate Report",
+    "systemConfig": "System Configuration"
+  },
+  "alerts": {
+    "title": "System Alerts",
+    "noAlerts": "No system alerts",
+    "pendingApproval": "{{count}} pending for approval",
+    "attentionNeeded": "{{count}} require attention"
+  },
+  "recentDocs": {
+    "title": "Recent Documents",
+    "noDocs": "No recent documents"
+  }
+}

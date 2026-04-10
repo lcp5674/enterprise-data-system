@@ -5,8 +5,11 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from '@umijs/max';
 import { ConfigProvider, Layout, Typography, Space } from 'antd';
-import { DatabaseOutlined } from '@ant-design/icons';
+import { DatabaseOutlined, GlobalOutlined } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
+import enUS from 'antd/locale/en_US';
+import { useAppStore } from '../stores';
+import { useCommonI18n } from '../hooks/useI18n';
 import styles from './UserLayout.less';
 
 const { Content } = Layout;
@@ -15,9 +18,22 @@ const { Text } = Typography;
 const UserLayout: React.FC = () => {
   const location = useLocation();
   const isLogin = location.pathname === '/user/login';
+  const { language, setLanguage } = useAppStore();
+  const { t: tCommon } = useCommonI18n();
+
+  // 切换语言
+  const handleLanguageChange = () => {
+    const newLanguage = language === 'zh-CN' ? 'en-US' : 'zh-CN';
+    setLanguage(newLanguage);
+    localStorage.setItem('language', newLanguage);
+    window.location.reload();
+  };
+
+  // 语言配置
+  const locale = language === 'zh-CN' ? zhCN : enUS;
 
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider locale={locale}>
       <Layout className={styles.layout}>
         <div className={styles.background}>
           <div className={styles.backgroundShape1} />
@@ -30,12 +46,20 @@ const UserLayout: React.FC = () => {
             {/* Logo */}
             <div className={styles.logo}>
               <DatabaseOutlined className={styles.logoIcon} />
-              <span className={styles.logoText}>企业数据资产管理系统</span>
+              <span className={styles.logoText}>{tCommon('app.title')}</span>
             </div>
 
             {/* 子页面内容 */}
             <div className={styles.main}>
               <Outlet />
+            </div>
+
+            {/* 语言切换 */}
+            <div className={styles.languageSwitch}>
+              <GlobalOutlined className={styles.languageIcon} onClick={handleLanguageChange} />
+              <span className={styles.languageText}>
+                {language === 'zh-CN' ? 'English' : '中文'}
+              </span>
             </div>
 
             {/* 页脚 */}
@@ -45,7 +69,7 @@ const UserLayout: React.FC = () => {
                 <Text className={styles.footerLink}>隐私</Text>
                 <Text className={styles.footerLink}>条款</Text>
               </Space>
-              <Text className={styles.copyright}>© 2024 企业数据资产管理系统 版权所有</Text>
+              <Text className={styles.copyright}>{tCommon('app.copyright')}</Text>
             </div>
           </div>
         </Content>

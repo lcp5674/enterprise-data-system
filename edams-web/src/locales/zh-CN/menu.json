@@ -1,0 +1,44 @@
+{
+  "dashboard": "工作台",
+  "asset": {
+    "title": "资产管理",
+    "list": "资产列表",
+    "favorites": "我的收藏",
+    "create": "注册资产",
+    "detail": "资产详情"
+  },
+  "catalog": {
+    "title": "数据目录",
+    "tree": "目录树",
+    "domain": "业务域"
+  },
+  "lineage": {
+    "title": "数据地图",
+    "graph": "血缘图",
+    "impact": "影响分析"
+  },
+  "quality": {
+    "title": "质量管理",
+    "overview": "质量概览",
+    "rules": "质量规则",
+    "issues": "问题追踪",
+    "reports": "质量报告"
+  },
+  "system": {
+    "title": "系统管理",
+    "users": "用户管理",
+    "roles": "角色权限",
+    "datasources": "数据源配置",
+    "settings": "系统设置",
+    "notifications": "通知管理"
+  },
+  "user": {
+    "login": "登录",
+    "register": "注册",
+    "forgotPassword": "忘记密码",
+    "resetPassword": "重置密码",
+    "profile": "个人资料",
+    "settings": "个人设置",
+    "logout": "退出登录"
+  }
+}

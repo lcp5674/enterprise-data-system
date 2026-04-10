@@ -1,0 +1,68 @@
+{
+  "title": "Asset Management",
+  "list": {
+    "title": "Asset List",
+    "add": "Add Asset",
+    "search": "Search Assets",
+    "filter": "Filter",
+    "export": "Export",
+    "columns": {
+      "name": "Asset Name",
+      "type": "Asset Type",
+      "owner": "Owner",
+      "status": "Status",
+      "quality": "Quality Score",
+      "createdAt": "Created At",
+      "updatedAt": "Updated At",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "deprecated": "Deprecated",
+      "archived": "Archived"
+    },
+    "type": {
+      "database": "Database",
+      "table": "Table",
+      "file": "File",
+      "api": "API",
+      "report": "Report",
+      "dashboard": "Dashboard"
+    }
+  },
+  "detail": {
+    "title": "Asset Details",
+    "basicInfo": "Basic Information",
+    "metadata": "Metadata",
+    "lineage": "Lineage",
+    "quality": "Quality Information",
+    "history": "Change History",
+    "tags": "Tags",
+    "comments": "Comments"
+  },
+  "create": {
+    "title": "Register New Asset",
+    "step1": "Basic Information",
+    "step2": "Metadata Configuration",
+    "step3": "Quality Rules",
+    "step4": "Access Permissions",
+    "name": "Asset Name",
+    "description": "Description",
+    "type": "Asset Type",
+    "owner": "Owner",
+    "tags": "Tags",
+    "submit": "Submit for Review",
+    "saveDraft": "Save as Draft"
+  },
+  "quality": {
+    "excellent": "Excellent (≥90)",
+    "good": "Good (80-89)",
+    "fair": "Fair (60-79)",
+    "poor": "Poor (<60)",
+    "metrics": "Quality Metrics",
+    "completeness": "Completeness",
+    "consistency": "Consistency",
+    "timeliness": "Timeliness",
+    "accuracy": "Accuracy"
+  }
+}

@@ -34,10 +34,10 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   // 初始状态
-  sidebarCollapsed: false,
+  sidebarCollapsed: Boolean(localStorage.getItem('sidebarCollapsed') === 'true'),
   sidebarWidth: 220,
-  theme: 'light',
-  language: 'zh-CN',
+  theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'light',
+  language: localStorage.getItem('language') || 'zh-CN',
   globalLoading: false,
   notificationCount: 0,
 
