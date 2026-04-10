@@ -1,0 +1,505 @@
+# 企业数据资产管理系统 - 认证服务部署配置
+# 环境: 生产环境
+# 版本: v1.3.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edams-auth
+  namespace: edams-prod
+  labels:
+    app: edams-auth
+    component: auth
+    tier: security
+    version: "v1.3.0"
+    environment: production
+    app.kubernetes.io/name: edams-auth
+    app.kubernetes.io/instance: edams-auth-prod
+    app.kubernetes.io/component: auth
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/version: "1.3.0"
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    description: "认证服务 - 用户身份认证和授权管理"
+    kubernetes.io/change-cause: "Deploy version 1.3.0 with OAuth2 improvements"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8081"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: edams-auth
+      environment: production
+  template:
+    metadata:
+      labels:
+        app: edams-auth
+        component: auth
+        tier: security
+        version: "v1.3.0"
+        environment: production
+        app.kubernetes.io/name: edams-auth
+        app.kubernetes.io/instance: edams-auth-prod
+        app.kubernetes.io/component: auth
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/path: "/actuator/prometheus"
+      prometheus.io/port: "8081"
+      sidecar.istio.io/inject: "true"
+      vault.hashicorp.com/agent-inject: "true"
+      vault.hashicorp.com/role: "edams-auth"
+      vault.hashicorp.com/agent-inject-secret-jwt-key: "secret/data/edams/auth/jwt"
+      vault.hashicorp.com/agent-inject-secret-db-credentials: "secret/data/edams/auth/db"
+    spec:
+      serviceAccountName: edams-auth-sa
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: edams-auth
+        image: registry.enterprise.com/edams/edams-auth:1.3.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8081
+          protocol: TCP
+        - name: management
+          containerPort: 8082
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: JAVA_OPTS
+          value: "-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp"
+        - name: NACOS_SERVER_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: edams-common-config
+              key: nacos.server.addr
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: edams-db-config
+              key: mysql.host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: edams-db-config
+              key: mysql.port
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: edams-db-config
+              key: mysql.database
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: edams-redis-config
+              key: redis.host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: edams-redis-config
+              key: redis.port
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: edams-auth-secrets
+              key: jwt.secret.key
+        envFrom:
+        - configMapRef:
+            name: edams-auth-config
+        securityContext:
+          privileged: false
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "2Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+            ephemeral-storage: "4Gi"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8081
+            scheme: HTTP
+            httpHeaders:
+            - name: X-Application-Health
+              value: "auth-service"
+          initialDelaySeconds: 120
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /actuator/health/startup
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+          successThreshold: 1
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: logs-volume
+          mountPath: /app/logs
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 60"]
+      - name: vault-agent
+        image: vault:1.15
+        imagePullPolicy: IfNotPresent
+        args: ["agent", "-config=/etc/vault/config.hcl"]
+        securityContext:
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: vault-config
+          mountPath: /etc/vault
+        - name: secrets-volume
+          mountPath: /etc/secrets
+      volumes:
+      - name: config-volume
+        configMap:
+          name: edams-auth-config
+          items:
+          - key: application-prod.yml
+            path: application-prod.yml
+      - name: vault-config
+        configMap:
+          name: vault-auth-config
+      - name: tmp-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      - name: secrets-volume
+        emptyDir: {}
+      imagePullSecrets:
+      - name: registry-secret
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - edams-auth
+            topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - security-node
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "security-node"
+        effect: "NoSchedule"
+      priorityClassName: high-priority
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edams-auth-config
+  namespace: edams-prod
+  labels:
+    app: edams-auth-config
+    environment: production
+data:
+  application-prod.yml: |
+    # 认证服务生产配置
+    server:
+      port: 8081
+      servlet:
+        context-path: /auth
+        session:
+          timeout: 30m
+      shutdown: graceful
+      compression:
+        enabled: true
+        mime-types: text/html,text/xml,text/plain,text/css,application/javascript,application/json
+        min-response-size: 2048
+    
+    spring:
+      application:
+        name: edams-auth
+      lifecycle:
+        timeout-per-shutdown-phase: 60s
+      
+      # 数据源配置
+      datasource:
+        url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:edams_auth}?useUnicode=true&characterEncoding=utf8&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        hikari:
+          pool-name: AuthHikariPool
+          minimum-idle: 5
+          maximum-pool-size: 20
+          idle-timeout: 300000
+          max-lifetime: 1800000
+          connection-timeout: 30000
+          connection-test-query: SELECT 1
+          data-source-properties:
+            cachePrepStmts: true
+            prepStmtCacheSize: 250
+            prepStmtCacheSqlLimit: 2048
+            useServerPrepStmts: true
+            useLocalSessionState: true
+            useLocalTransactionState: true
+            rewriteBatchedStatements: true
+            cacheResultSetMetadata: true
+            cacheServerConfiguration: true
+            elideSetAutoCommits: true
+            maintainTimeStats: false
+      
+      # Redis配置
+      redis:
+        host: ${REDIS_HOST:redis}
+        port: ${REDIS_PORT:6379}
+        password: ${REDIS_PASSWORD:}
+        database: 0
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 20
+            max-idle: 10
+            min-idle: 5
+            max-wait: 3000ms
+          shutdown-timeout: 100ms
+      
+      # JPA配置
+      jpa:
+        database-platform: org.hibernate.dialect.MySQL8Dialect
+        hibernate:
+          ddl-auto: validate
+        show-sql: false
+        properties:
+          hibernate:
+            format_sql: true
+            jdbc:
+              batch_size: 20
+            order_inserts: true
+            order_updates: true
+            query:
+              in_clause_parameter_padding: true
+      
+      # 安全配置
+      security:
+        oauth2:
+          resourceserver:
+            jwt:
+              issuer-uri: http://edams-auth.edams-prod.svc.cluster.local:8081/auth
+          client:
+            registration:
+              keycloak:
+                client-id: edams-auth-client
+                client-secret: ${CLIENT_SECRET}
+                scope: openid,profile,email
+                authorization-grant-type: authorization_code
+                redirect-uri: '{baseUrl}/login/oauth2/code/keycloak'
+            provider:
+              keycloak:
+                issuer-uri: ${KEYCLOAK_ISSUER_URI}
+                user-name-attribute: preferred_username
+      
+      # 会话管理
+      session:
+        redis:
+          flush-mode: on_save
+          namespace: auth:sessions
+          cleanup-cron: 0 * * * * *
+      
+      # 事务管理
+      transaction:
+        rollback-on-commit-failure: true
+      
+      # 缓存配置
+      cache:
+        type: redis
+        redis:
+          time-to-live: 3600000
+          cache-null-values: false
+      
+      # 邮件配置
+      mail:
+        host: ${MAIL_HOST}
+        port: ${MAIL_PORT}
+        username: ${MAIL_USERNAME}
+        password: ${MAIL_PASSWORD}
+        properties:
+          mail:
+            smtp:
+              auth: true
+              starttls:
+                enable: true
+      
+      # 消息配置
+      kafka:
+        bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+        producer:
+          key-serializer: org.apache.kafka.common.serialization.StringSerializer
+          value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+          properties:
+            spring.json.type.mapping: audit:com.enterprise.edams.common.event.AuditEvent
+        consumer:
+          group-id: edams-auth-group
+          key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+          value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+          properties:
+            spring.json.trusted.packages: "*"
+    
+    # JWT配置
+    jwt:
+      secret-key: ${JWT_SECRET_KEY}
+      access-token-expiration: 3600000  # 1小时
+      refresh-token-expiration: 2678400000  # 31天
+      issuer: edams-auth-service
+      audience: edams-client
+    
+    # 多因素认证配置
+    mfa:
+      enabled: true
+      types: ["TOTP", "SMS", "EMAIL", "HARDWARE"]
+      default-type: TOTP
+      totp:
+        time-step: 30
+        code-length: 6
+        window-size: 2
+    
+    # 密码策略
+    password:
+      policy:
+        min-length: 8
+        require-uppercase: true
+        require-lowercase: true
+        require-digit: true
+        require-symbol: true
+        max-age-days: 90
+        history-size: 5
+        max-attempts: 5
+        lockout-duration: 900
+    
+    # 单点登录配置
+    sso:
+      providers:
+        keycloak:
+          enabled: true
+          realm: edams-realm
+          client-id: edams-sso-client
+          client-secret: ${SSO_CLIENT_SECRET}
+          issuer-uri: ${KEYCLOAK_URL}/realms/edams-realm
+        ldap:
+          enabled: true
+          url: ${LDAP_URL}
+          base-dn: ${LDAP_BASE_DN}
+          user-dn-pattern: uid={0},ou=people
+          group-search-base: ou=groups
+          manager-dn: ${LDAP_MANAGER_DN}
+          manager-password: ${LDAP_MANAGER_PASSWORD}
+    
+    # 审计日志配置
+    audit:
+      enabled: true
+      events:
+        - USER_LOGIN
+        - USER_LOGOUT
+        - PASSWORD_CHANGE
+        - ROLE_CHANGE
+        - PERMISSION_CHANGE
+      kafka:
+        topic: edams-audit-log
+        partition-count: 3
+        replication-factor: 3
+    
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus,auditevents,caches
+        enabled-by-default: false
+      endpoint:
+        health:
+          show-details: when_authorized
+          probes:
+            enabled: true
+          group:
+            liveness:
+              include: livenessState,redis,db
+            readiness:
+              include: readinessState,redis,db,kafka
+        prometheus:
+          enabled: true
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+        tags:
+          application: ${spring.application.name}
+      tracing:
+        sampling:
+          probability: 0.2
+    
+    logging:
+      level:
+        com.enterprise.edams.auth: INFO
+        org.springframework.security: WARN
+        org.springframework.web: INFO
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+        file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %X{traceId} %X{spanId} [%thread] %-5level %logger{36} - %msg%n"
+      file:
+        name: /app/logs/auth.log
+      logback:
+        rollingpolicy:
+          max-file-size: 50MB
+          max-history: 30
+    
+    # Nacos配置
+    nacos:
+      discovery:
+        namespace: prod
+        group: EDAMS_PRODUCTION
+        metadata:
+          version: 1.3.0
+          security-tier: high-priority

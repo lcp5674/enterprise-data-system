@@ -1,0 +1,87 @@
+# 企业数据资产管理系统 - 命名空间配置
+# 适用环境: 生产环境 (prod)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-prod
+  labels:
+    name: edams-prod
+    environment: production
+    tier: application
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    description: "企业数据资产管理系统 - 生产环境"
+    managed-by: "devops-team"
+    cost-center: "it-department"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-monitoring
+  labels:
+    name: edams-monitoring
+    environment: production
+    tier: monitoring
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/component: monitoring
+  annotations:
+    description: "企业数据资产管理系统 - 监控组件命名空间"
+    prometheus.io/scrape: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-logging
+  labels:
+    name: edams-logging
+    environment: production
+    tier: logging
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/component: logging
+  annotations:
+    description: "企业数据资产管理系统 - 日志组件命名空间"
+    logging.enabled: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-cert-manager
+  labels:
+    name: edams-cert-manager
+    environment: production
+    tier: infrastructure
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/component: cert-manager
+  annotations:
+    description: "企业数据资产管理系统 - 证书管理命名空间"
+    cert-manager.io/inject-ca-from-secret: "true"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-ingress
+  labels:
+    name: edams-ingress
+    environment: production
+    tier: infrastructure
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/component: ingress
+  annotations:
+    description: "企业数据资产管理系统 - Ingress控制器命名空间"
+    kubernetes.io/ingress.class: "nginx"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edams-data
+  labels:
+    name: edams-data
+    environment: production
+    tier: data
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/component: database
+  annotations:
+    description: "企业数据资产管理系统 - 数据存储组件命名空间"
+    backup.enabled: "true"

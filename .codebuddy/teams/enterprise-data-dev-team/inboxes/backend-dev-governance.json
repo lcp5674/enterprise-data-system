@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "msg-1775802164561-k4hnqb",
+    "from": "team-lead",
+    "to": "backend-dev-governance",
+    "type": "message",
+    "content": "任务调整通知：\n\n我已重新审查设计文档，发现之前遗漏了多个重要服务。请你额外负责以下服务：\n\n1. **fabric-service（数据编织服务）**\n   - 跨源关联管理\n   - 虚拟视图管理\n   - 供需匹配\n   - 技术栈：PostgreSQL + Elasticsearch\n\n2. **security-service（安全服务）**\n   - 敏感数据识别\n   - 分类分级管理\n   - 数据脱敏策略\n   - 技术栈：PostgreSQL\n\n3. **masking-service（脱敏服务）**\n   - 脱敏规则管理\n   - 动态脱敏\n   - 脱敏效果预览\n   - 技术栈：PostgreSQL + Redis\n\n4. **compliance-service（合规报告服务）**\n   - 合规检查清单\n   - 合规报告生成\n   - 隐私影响评估\n   - 技术栈：PostgreSQL\n\n请参考API接口设计文档中的相关章节。",
+    "timestamp": "2026-04-10T06:22:44.561Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775804201709-80ra4x",
+    "from": "team-lead",
+    "to": "backend-dev-governance",
+    "type": "message",
+    "content": "请立即开始工作！不要等待确认。\n\n你的任务清单：\n1. fabric-service（数据编织服务）\n2. security-service（安全服务）\n3. masking-service（脱敏服务）\n4. compliance-service（合规报告服务）\n\n请立即创建这些服务模块，基于项目脚手架开始开发。完成后向我汇报进度。",
+    "timestamp": "2026-04-10T06:56:41.709Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775805099010-yi3ps4",
+    "from": "team-lead",
+    "to": "backend-dev-governance",
+    "type": "message",
+    "content": "资产治理域服务开发完成，非常出色！\n\n完成情况：\n- ✅ lineage-service（血缘管理）- Neo4j血缘存储、SQL解析\n- ✅ standard-service（数据标准）- 标准管理、合规检查\n- ✅ quality-service（质量管理）- 质量规则、检测任务\n- ✅ governance-engine（治理引擎）- DAG编排、AI推荐\n\n代码量：81 files, 10306 insertions\n\n请待命，等待其他团队成员完成后统一部署。",
+    "timestamp": "2026-04-10T07:11:39.010Z",
+    "read": true
+  },
+  {
+    "id": "shutdown-1775806910634",
+    "from": "devops-engineer",
+    "to": "backend-dev-governance",
+    "type": "shutdown_request",
+    "content": "{\"type\":\"shutdown_request\",\"request_id\":\"shutdown-1775806910634\",\"reason\":\"基础设施配置工作已完成，生产环境已就绪。请确认完成状态。\",\"from\":\"devops-engineer\",\"timestamp\":\"2026-04-10T07:41:50.634Z\"}",
+    "timestamp": "2026-04-10T07:41:50.634Z",
+    "read": true
+  }
+]

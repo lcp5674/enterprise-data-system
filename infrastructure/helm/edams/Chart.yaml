@@ -1,0 +1,66 @@
+apiVersion: v2
+name: edams
+description: Enterprise Data Asset Management System - Complete Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+# Metadata
+keywords:
+  - data-asset
+  - management
+  - microservices
+  - kubernetes
+  - enterprise
+
+# Chart dependencies
+dependencies:
+  # PostgreSQL for core data storage
+  - name: postgresql
+    version: 12.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+    
+  # Redis for caching and session management
+  - name: redis
+    version: 18.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+    
+  # RabbitMQ for message queue
+  - name: rabbitmq
+    version: 13.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: rabbitmq.enabled
+    
+  # ElasticSearch for logging and search
+  - name: elasticsearch
+    version: 19.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: elasticsearch.enabled
+    
+  # Kafka for event streaming
+  - name: kafka
+    version: 26.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: kafka.enabled
+
+# Maintainers
+maintainers:
+  - name: DevOps Team
+    email: devops@enterprise.com
+    url: https://enterprise.com
+
+# Annotations for Helm Hub
+annotations:
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial Helm chart for EDAMS
+  artifacthub.io/images: |
+    - name: edams
+      image: registry.enterprise.com/edams/core:latest
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://docs.edams.enterprise.com
+    - name: Source Code
+      url: https://github.com/enterprise/edams

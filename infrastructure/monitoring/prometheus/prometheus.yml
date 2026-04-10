@@ -1,0 +1,515 @@
+# =====================================================
+# EDAMS - Prometheus 配置
+# 企业数据资产管理系统 - 生产环境监控配置
+# =====================================================
+
+global:
+  scrape_interval: 30s           # 默认抓取间隔
+  evaluation_interval: 30s       # 规则评估间隔
+  scrape_timeout: 10s           # 抓取超时时间
+
+  # 外部标签
+  external_labels:
+    cluster: 'edams-prod'
+    environment: 'production'
+    project: 'enterprise-data-asset-management-system'
+
+# 规则文件
+rule_files:
+  - "rules/alerts.yml"
+  - "rules/recording.yml"
+
+# 告警配置
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      scheme: http
+      timeout: 10s
+      api_version: v2
+
+# 远程写入配置 (可选，用于长期存储)
+remote_write:
+  - url: "http://thanos-receive:10908/api/v1/receive"
+    remote_timeout: 30s
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: "(up|prometheus_build_info|prometheus_tsdb.*)"
+        action: keep
+    queue_config:
+      capacity: 2500
+      max_shards: 200
+      min_shards: 1
+      max_samples_per_send: 500
+      batch_send_deadline: 5s
+      min_backoff: 30ms
+      max_backoff: 100ms
+
+# 远程读取配置 (可选)
+remote_read:
+  - url: "http://thanos-query:10902/api/v1/read"
+    read_recent: true
+
+# 抓取配置 - 应用服务
+scrape_configs:
+  # Prometheus自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    honor_labels: true
+
+  # Kubernetes API服务器
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  # Kubernetes节点
+  - job_name: 'kubernetes-nodes'
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+
+  # Kubernetes Pods (Spring Boot Actuator)
+  - job_name: 'edams-applications'
+    kubernetes_sd_configs:
+      - role: pod
+    relabel_configs:
+      # 只监控edams命名空间的pods
+      - source_labels: [__meta_kubernetes_namespace]
+        action: keep
+        regex: ^(edams-prod|edams-staging|edams-dev)$
+      
+      # 提取应用标签
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: edams-.+
+      
+      # 设置抓取路径
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      
+      # 设置标签
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: kubernetes_namespace
+      
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: kubernetes_pod_name
+      
+      - source_labels: [__meta_kubernetes_pod_controller_name]
+        target_label: kubernetes_controller
+      
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        target_label: container
+
+  # API网关监控
+  - job_name: 'edams-gateway'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - edams-prod
+            - edams-staging
+            - edams-dev
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app]
+        action: keep
+        regex: edams-gateway
+      
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: http
+      
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: service
+      
+      - source_labels: [__meta_kubernetes_pod_node_name]
+        target_label: node
+
+  # 数据库监控
+  - job_name: 'databases'
+    static_configs:
+      # MySQL监控
+      - targets: ['mysql-master:9104']
+        labels:
+          instance: 'mysql-master'
+          component: 'database'
+          db_type: 'mysql'
+          role: 'master'
+      
+      - targets: ['mysql-slave:9104']
+        labels:
+          instance: 'mysql-slave'
+          component: 'database'
+          db_type: 'mysql'
+          role: 'slave'
+      
+      # Redis监控
+      - targets: ['redis-master:9121']
+        labels:
+          instance: 'redis-master'
+          component: 'cache'
+          db_type: 'redis'
+          role: 'master'
+      
+      - targets: ['redis-replica:9121']
+        labels:
+          instance: 'redis-replica'
+          component: 'cache'
+          db_type: 'redis'
+          role: 'replica'
+      
+      # Elasticsearch监控
+      - targets: ['elasticsearch-master:9114']
+        labels:
+          instance: 'elasticsearch-master'
+          component: 'search'
+          db_type: 'elasticsearch'
+      
+      # Neo4j监控
+      - targets: ['neo4j-core-1:2004']
+        labels:
+          instance: 'neo4j-core-1'
+          component: 'graph-database'
+          db_type: 'neo4j'
+          role: 'core'
+
+  # 消息队列监控
+  - job_name: 'message-queues'
+    static_configs:
+      # Kafka监控
+      - targets: ['kafka-broker-1:9308']
+        labels:
+          instance: 'kafka-broker-1'
+          component: 'message-queue'
+          mq_type: 'kafka'
+          broker_id: '1'
+      
+      - targets: ['kafka-broker-2:9308']
+        labels:
+          instance: 'kafka-broker-2'
+          component: 'message-queue'
+          mq_type: 'kafka'
+          broker_id: '2'
+      
+      - targets: ['kafka-broker-3:9308']
+        labels:
+          instance: 'kafka-broker-3'
+          component: 'message-queue'
+          mq_type: 'kafka'
+          broker_id: '3'
+      
+      # Zookeeper监控
+      - targets: ['zookeeper:7000']
+        labels:
+          instance: 'zookeeper'
+          component: 'coordination'
+          service: 'zookeeper'
+
+  # 基础设施监控
+  - job_name: 'node-exporter'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+  # cAdvisor容器监控
+  - job_name: 'cadvisor'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+
+  # kube-state-metrics
+  - job_name: 'kube-state-metrics'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - kube-system
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_name]
+        action: keep
+        regex: kube-state-metrics
+      
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: http-metrics
+
+  # 自定义业务指标
+  - job_name: 'business-metrics'
+    static_configs:
+      # 资产数量监控
+      - targets: ['edams-asset.edams-prod.svc.cluster.local:8080']
+        labels:
+          service: 'asset-service'
+          environment: 'production'
+          metric_type: 'business'
+      
+      # 质量评分监控
+      - targets: ['edams-quality.edams-prod.svc.cluster.local:8080']
+        labels:
+          service: 'quality-service'
+          environment: 'production'
+          metric_type: 'business'
+      
+      # 血缘覆盖率监控
+      - targets: ['edams-lineage.edams-prod.svc.cluster.local:8080']
+        labels:
+          service: 'lineage-service'
+          environment: 'production'
+          metric_type: 'business'
+
+  # Blackbox exporter - HTTP健康检查
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://edams-gateway.edams-prod.svc.cluster.local:8888/actuator/health
+        - http://edams-auth.edams-prod.svc.cluster.local:8081/actuator/health
+        - http://edams-asset.edams-prod.svc.cluster.local:8082/actuator/health
+        - http://elasticsearch-master.edams-data.svc.cluster.local:9200/_cluster/health
+        - http://redis-master.edams-data.svc.cluster.local:6379
+        - http://mysql-master.edams-data.svc.cluster.local:3306
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Blackbox exporter - TCP健康检查
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+        - kafka-broker-1:9092
+        - zookeeper:2181
+        - neo4j-core-1:7687
+        - nacos-cluster:8848
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+# 服务发现配置 - 支持Consul/Nacos
+# consul_sd_configs:
+#   - server: 'consul:8500'
+#     services: ['edams-gateway', 'edams-auth', 'edams-asset']
+
+# 文件SD配置 - 用于临时添加目标
+# file_sd_configs:
+#   - files:
+#     - '/etc/prometheus/file_sd/*.json'
+#     refresh_interval: 5m
+
+# TLS配置
+tls_config:
+  ca_file: /etc/prometheus/tls/ca.crt
+  cert_file: /etc/prometheus/tls/tls.crt
+  key_file: /etc/prometheus/tls/tls.key
+  # server_name: prometheus.edams.local
+  # insecure_skip_verify: false
+
+# 基本认证配置
+# basic_auth:
+#   username: prometheus
+#   password: prometheus_password
+
+# 授权配置
+# authorization:
+#   type: Bearer
+#   credentials: bearer_token
+
+# OAuth2配置
+# oauth2:
+#   client_id: prometheus
+#   client_secret: client_secret
+#   token_url: https://oauth2.provider.com/token
+#   scopes:
+#     - metrics.read
+
+# 代理配置
+# proxy_url: http://proxy.example.com:8080
+
+# 设置全局标签 (在所有指标上添加)
+scrape_config_defaults:
+  metric_relabel_configs:
+    - source_labels: [__name__]
+      regex: 'go_.*|process_.*|http_.*'
+      action: drop
+    
+    # 重命名标签
+    - source_labels: [instance]
+      regex: '(.*):\d+'
+      target_label: instance
+      replacement: '${1}'
+    
+    # 添加环境标签
+    - target_label: environment
+      replacement: 'production'
+    
+    # 添加集群标签
+    - target_label: cluster
+      replacement: 'edams-prod'
+    
+    # 添加项目标签
+    - target_label: project
+      replacement: 'enterprise-data-asset-management-system'
+
+# 存储配置
+storage:
+  tsdb:
+    path: /prometheus
+    retention:
+      time: 30d
+      size: 50GB
+    wal_compression: true
+    stripe_size: 16384
+    min_block_duration: 2h
+    max_block_duration: 24h
+
+# 查询日志配置
+query_log_file: /var/log/prometheus/query.log
+
+# Web配置
+web:
+  listen_address: 0.0.0.0:9090
+  read_timeout: 5m
+  max_connections: 512
+  enable_lifecycle: true
+  enable_admin_api: true
+  page_title: "EDAMS - Prometheus"
+  
+  # CORS配置
+  cors_allowed_origins:
+    - "https://grafana.edams.local"
+    - "https://edams.com"
+  
+  # 压缩配置
+  compression: true
+  
+  # 静态文件目录
+  static_dirs:
+    - /usr/share/prometheus/console_libraries
+    - /usr/share/prometheus/consoles
+
+# 遥测配置
+telemetry:
+  prefix: prometheus_
+  disable_compression: false
+  max_labels_name_length: 512
+  max_labels_value_length: 1024
+  max_label_names_per_series: 30
+
+# 限制配置
+limits:
+  max_samples_per_query: 50000000
+  max_concurrent_queries: 20
+  max_concurrent_selects: 4
+  max_query_length: 2592000s  # 30天
+  max_query_lookback: 0s
+  max_query_parallelism: 14
+  timeout: 2m
+  max_fetched_series: 0
+  max_fetched_chunks: 0
+  max_fetched_chunk_bytes: 0
+  max_fetched_samples: 0
+  cardinality_limit: 100000
+
+# 性能优化配置
+query:
+  lookback_delta: 5m
+  max_concurrent: 20
+  timeout: 2m
+
+# 记录规则评估统计
+rule:
+  evaluation_interval: 30s
+  rule_path: /etc/prometheus/rules
+  rule_reload_interval: 1m
+
+# 存储适配器配置
+storage_adapter:
+  remote_read_concurrency_limit: 10
+  remote_read_max_samples_per_query: 10000000
+  remote_read_sample_limit: 5000000
+
+# 日志配置
+log:
+  level: info
+  format: logfmt
+
+# 指标配置
+metrics:
+  disable_go_collector: false
+  disable_process_collector: false
+  path: /metrics
+  prefix: prometheus_

@@ -7,5 +7,14 @@
     "content": "请在团队中增加一个负责**数据分析服务(OLAP)**的后端开发工程师。\n\n根据技术架构文档，系统使用ClickHouse作为OLAP引擎，需要开发：\n1. **analytics-service（数据分析服务）** - 负责Ad-hoc查询、自助分析、资产价值分析\n2. 可能还需要 **report-service（报表服务）** - 负责报表生成与分发\n\n请在任务分配中补充这个模块。",
     "timestamp": "2026-04-10T06:01:42.784Z",
     "read": true
+  },
+  {
+    "id": "shutdown-1775806910607",
+    "from": "devops-engineer",
+    "to": "architect-lead",
+    "type": "shutdown_request",
+    "content": "{\"type\":\"shutdown_request\",\"request_id\":\"shutdown-1775806910607\",\"reason\":\"基础设施配置工作已完成，生产环境已就绪。请确认完成状态。\",\"from\":\"devops-engineer\",\"timestamp\":\"2026-04-10T07:41:50.607Z\"}",
+    "timestamp": "2026-04-10T07:41:50.607Z",
+    "read": true
   }
 ]

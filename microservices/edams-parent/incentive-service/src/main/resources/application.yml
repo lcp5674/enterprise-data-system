@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: incentive-service
+  profiles:
+    active: dev
+
+server:
+  port: 8089
+
+spring.cloud.nacos.discovery.server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+spring.cloud.nacos.discovery.namespace: ${NACOS_NAMESPACE:dev}
+spring.cloud.nacos.config.server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+spring.cloud.nacos.config.namespace: ${NACOS_NAMESPACE:dev}
+
+spring.datasource.driver-class-name: org.postgresql.Driver
+spring.datasource.url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edams_incentive}
+spring.datasource.username: ${POSTGRES_USERNAME:postgres}
+spring.datasource.password: ${POSTGRES_PASSWORD:postgres123}
+
+spring.jpa.database-platform: org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto: update
+spring.jpa.show-sql: false
+
+spring.data.redis.host: ${REDIS_HOST:localhost}
+spring.data.redis.port: ${REDIS_PORT:6379}
+spring.data.redis.password: ${REDIS_PASSWORD:}
+spring.data.redis.database: 7
+spring.data.redis.timeout: 3000ms
+
+management.endpoints.web.exposure.include: health,info,metrics
+management.endpoint.health.show-details: always
+
+springdoc.api-docs.enabled: true
+springdoc.swagger-ui.enabled: true
+
+logging.level.root: INFO
+logging.level.com.enterprise.edams: DEBUG

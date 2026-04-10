@@ -1,0 +1,398 @@
+# Enterprise Data Asset Management System Helm Chart Values
+# This is the main configuration file for the EDAMS Helm Chart
+
+# Global settings
+global:
+  # Environment: dev, staging, prod
+  environment: prod
+  
+  # Domain configuration
+  domain: edams.enterprise.com
+  
+  # Registry configuration
+  registry:
+    server: registry.enterprise.com
+    repository: edams
+    
+  # TLS configuration
+  tls:
+    enabled: true
+    issuer: letsencrypt-prod
+    
+  # Security settings
+  security:
+    nonRoot: true
+    readOnlyRootFilesystem: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    
+  # Storage class for persistent volumes
+  storageClass: ssd-fast
+  
+  # Monitoring settings
+  monitoring:
+    enabled: true
+    prometheusScrape: true
+    jaegerTracing: true
+
+# Gateway Service Configuration
+gateway:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: registry.enterprise.com/edams/gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  service:
+    type: LoadBalancer
+    port: 80
+    targetPort: 8080
+    annotations:
+      # For cloud load balancers
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/azure-load-balancer-type: external
+    
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    hosts:
+      - host: edams.enterprise.com
+        paths:
+          - path: /
+            pathType: Prefix
+    
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+# Authentication Service Configuration
+auth:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: registry.enterprise.com/edams/auth
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  database:
+    # Use external PostgreSQL or embedded
+    external: true
+    host: postgresql-primary
+    port: 5432
+    database: auth_db
+    username: auth_user
+    password: ${AUTH_DB_PASSWORD}
+    
+  secrets:
+    jwt:
+      secretKey: ${JWT_SECRET_KEY}
+      expiration: 86400  # 24 hours in seconds
+    
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 2Gi
+
+# Asset Management Service Configuration
+asset:
+  enabled: true
+  replicaCount: 3
+  
+  image:
+    repository: registry.enterprise.com/edams/asset
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  storage:
+    s3:
+      enabled: true
+      endpoint: https://s3.enterprise.com
+      bucket: edams-assets
+    local:
+      enabled: false
+      path: /data/assets
+    
+  resources:
+    requests:
+      cpu: 300m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+# Discovery Service Configuration
+discovery:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: registry.enterprise.com/edams/discovery
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  scanners:
+    database:
+      enabled: true
+      interval: 3600  # 1 hour
+    filesystem:
+      enabled: true
+      interval: 1800  # 30 minutes
+    api:
+      enabled: true
+      interval: 7200  # 2 hours
+
+# Governance Service Configuration
+governance:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: registry.enterprise.com/edams/governance
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  policies:
+    classification:
+      enabled: true
+      autoTagging: true
+    compliance:
+      enabled: true
+      rules:
+        - gdpr
+        - hipaa
+        - soc2
+
+# Knowledge Intelligence Service Configuration
+knowledge:
+  enabled: true
+  replicaCount: 2
+  
+  image:
+    repository: registry.enterprise.com/edams/knowledge
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  ai:
+    enabled: true
+    model: hunyuan-2.0
+    endpoint: https://ai.enterprise.com/v1
+    
+  embeddings:
+    enabled: true
+    dimensions: 768
+    storage: elasticsearch
+
+# Database Configuration (PostgreSQL)
+postgresql:
+  enabled: true
+  architecture: replication
+  auth:
+    username: edams_admin
+    password: ${POSTGRES_PASSWORD}
+    database: edams_prod
+    postgresPassword: ${POSTGRES_ROOT_PASSWORD}
+    
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: ssd-fast
+    resources:
+      requests:
+        cpu: 1
+        memory: 4Gi
+      limits:
+        cpu: 4
+        memory: 16Gi
+    
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: ssd-fast
+    
+  backup:
+    enabled: true
+    cron: "0 2 * * *"  # Daily at 2 AM
+    retention: 30d
+
+# Redis Configuration
+redis:
+  enabled: true
+  architecture: replication
+  auth:
+    password: ${REDIS_PASSWORD}
+    
+  master:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
+    
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 50Gi
+
+# Message Queue Configuration (RabbitMQ)
+rabbitmq:
+  enabled: true
+  auth:
+    username: edams
+    password: ${RABBITMQ_PASSWORD}
+    
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: ssd-fast
+    
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+# Search Configuration (ElasticSearch)
+elasticsearch:
+  enabled: true
+  # Use 3-node cluster for production
+  replicaCount: 3
+  
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+    
+  persistence:
+    enabled: true
+    size: 200Gi
+    storageClass: ssd-fast
+    
+  # Security features
+  security:
+    ssl:
+      enabled: true
+    auth:
+      enabled: true
+      username: elastic
+      password: ${ELASTIC_PASSWORD}
+
+# Event Streaming (Kafka - optional)
+kafka:
+  enabled: false  # Enable only for large-scale deployments
+  replicaCount: 3
+  
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClass: ssd-fast
+
+# Monitoring Stack Configuration
+monitoring:
+  enabled: true
+  
+  prometheus:
+    enabled: true
+    retention: 30d
+    
+  grafana:
+    enabled: true
+    adminPassword: ${GRAFANA_ADMIN_PASSWORD}
+    
+  alertmanager:
+    enabled: true
+    config:
+      # Alert routing configuration
+      global:
+        smtp_smarthost: 'smtp.enterprise.com:587'
+        smtp_from: 'alerts@edams.enterprise.com'
+
+# Logging Stack Configuration
+logging:
+  enabled: true
+  
+  loki:
+    enabled: true
+    persistence:
+      size: 100Gi
+      
+  fluentbit:
+    enabled: true
+    
+  kibana:
+    enabled: true
+
+# Backup and Restore Configuration
+backup:
+  enabled: true
+  
+  velero:
+    enabled: true
+    schedule:
+      daily: "0 3 * * *"  # 3 AM daily
+      weekly: "0 4 * * 0"  # 4 AM Sunday
+    retention:
+      daily: 7
+      weekly: 4
+      monthly: 12
+
+# Security Configuration
+security:
+  # Network policies
+  networkPolicies:
+    enabled: true
+    
+  # Pod Security Standards
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10000
+    runAsGroup: 10000
+    fsGroup: 10000
+    
+  # Container Security Context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    
+  # Secret management
+  externalSecrets:
+    enabled: true
+    provider: vault

@@ -1,0 +1,359 @@
+# 企业数据资产管理系统 - API网关部署配置
+# 环境: 生产环境
+# 版本: v1.0.0
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edams-gateway
+  namespace: edams-prod
+  labels:
+    app: edams-gateway
+    component: gateway
+    tier: api-gateway
+    version: "v2.5.0"
+    environment: production
+    app.kubernetes.io/name: edams-gateway
+    app.kubernetes.io/instance: edams-gateway-prod
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    app.kubernetes.io/version: "2.5.0"
+    app.kubernetes.io/managed-by: helm
+  annotations:
+    description: "API网关服务 - Spring Cloud Gateway"
+    kubernetes.io/change-cause: "Deploy version 2.5.0 with performance improvements"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8888"
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: edams-gateway
+      environment: production
+  template:
+    metadata:
+      labels:
+        app: edams-gateway
+        component: gateway
+        tier: api-gateway
+        version: "v2.5.0"
+        environment: production
+        app.kubernetes.io/name: edams-gateway
+        app.kubernetes.io/instance: edams-gateway-prod
+        app.kubernetes.io/component: gateway
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/path: "/actuator/prometheus"
+      prometheus.io/port: "8888"
+      sidecar.istio.io/inject: "true"
+      vault.hashicorp.com/agent-inject: "true"
+      vault.hashicorp.com/role: "edams-gateway"
+      vault.hashicorp.com/agent-inject-secret-config.properties: "secret/data/edams/gateway"
+    spec:
+      serviceAccountName: edams-gateway-sa
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: edams-gateway
+        image: registry.enterprise.com/edams/edams-gateway:2.5.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8888
+          protocol: TCP
+        - name: management
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: JAVA_OPTS
+          value: "-Xms1g -Xmx2g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ParallelRefProcEnabled -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp"
+        - name: NACOS_SERVER_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: edams-common-config
+              key: nacos.server.addr
+        - name: SENTINEL_DASHBOARD_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: edams-common-config
+              key: sentinel.dashboard.addr
+        envFrom:
+        - configMapRef:
+            name: edams-gateway-config
+        securityContext:
+          privileged: false
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+            ephemeral-storage: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8888
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8888
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /actuator/health/startup
+            port: 8888
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+          successThreshold: 1
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: logs-volume
+          mountPath: /app/logs
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 30"]
+      volumes:
+      - name: config-volume
+        configMap:
+          name: edams-gateway-config
+          items:
+          - key: application-prod.yml
+            path: application-prod.yml
+      - name: tmp-volume
+        emptyDir: {}
+      - name: logs-volume
+        emptyDir: {}
+      imagePullSecrets:
+      - name: registry-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - edams-gateway
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - app-node
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "edams-node"
+        effect: "NoSchedule"
+      priorityClassName: high-priority
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edams-gateway-config
+  namespace: edams-prod
+  labels:
+    app: edams-gateway-config
+    environment: production
+data:
+  application-prod.yml: |
+    # Spring Cloud Gateway 生产配置
+    server:
+      port: 8888
+      shutdown: graceful
+      forward-headers-strategy: framework
+    
+    spring:
+      application:
+        name: edams-gateway
+      lifecycle:
+        timeout-per-shutdown-phase: 30s
+      
+      cloud:
+        gateway:
+          metrics:
+            enabled: true
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          
+          routes:
+            - id: edams-auth
+              uri: lb://edams-auth
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - StripPrefix=1
+                - name: CircuitBreaker
+                  args:
+                    name: edams-auth
+                    fallbackUri: forward:/fallback/auth
+                
+            - id: edams-asset
+              uri: lb://edams-asset
+              predicates:
+                - Path=/api/assets/**
+              filters:
+                - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 100
+                    redis-rate-limiter.burstCapacity: 200
+                
+            - id: edams-lineage
+              uri: lb://edams-lineage
+              predicates:
+                - Path=/api/lineage/**
+              filters:
+                - StripPrefix=1
+                
+            - id: edams-quality
+              uri: lb://edams-quality
+              predicates:
+                - Path=/api/quality/**
+              filters:
+                - StripPrefix=1
+                
+            - id: edams-insight
+              uri: lb://edams-insight
+              predicates:
+                - Path=/api/insight/**
+              filters:
+                - StripPrefix=1
+          
+          httpclient:
+            connect-timeout: 5000
+            response-timeout: 30s
+        
+      security:
+        oauth2:
+          resourceserver:
+            jwt:
+              issuer-uri: ${ISSUER_URI}
+              jwk-set-uri: ${JWK_SET_URI}
+    
+    resilience4j:
+      circuitbreaker:
+        instances:
+          edams-auth:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            permittedNumberOfCallsInHalfOpenState: 3
+            automaticTransitionFromOpenToHalfOpenEnabled: true
+            waitDurationInOpenState: 10s
+            failureRateThreshold: 50
+            eventConsumerBufferSize: 10
+      
+      ratelimiter:
+        instances:
+          edams-asset-ratelimiter:
+            limitForPeriod: 100
+            limitRefreshPeriod: 1s
+            timeoutDuration: 0
+    
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus
+        enabled-by-default: false
+      endpoint:
+        health:
+          show-details: always
+          probes:
+            enabled: true
+        prometheus:
+          enabled: true
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+        tags:
+          application: ${spring.application.name}
+      tracing:
+        sampling:
+          probability: 0.1
+    
+    logging:
+      level:
+        org.springframework.cloud.gateway: INFO
+        reactor.netty: WARN
+        com.enterprise.edams.gateway: DEBUG
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+        file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+      file:
+        name: /app/logs/gateway.log
+      logback:
+        rollingpolicy:
+          max-file-size: 10MB
+          max-history: 30
+    
+    # Nacos Discovery配置
+    nacos:
+      discovery:
+        namespace: prod
+        group: EDAMS_PRODUCTION
+        heart-beat-interval: 5000
+        heart-beat-timeout: 15000
+        ip-delete-timeout: 30000
+        register-enabled: true
+    
+    # Sentinel配置
+    sentinel:
+      eager: true
+      transport:
+        dashboard: ${SENTINEL_DASHBOARD_ADDR}
+        port: 8719
+      datasource:
+        nacos:
+          server-addr: ${NACOS_SERVER_ADDR}
+          data-id: ${spring.application.name}-sentinel
+          group-id: SENTINEL_GROUP
+          rule-type: flow

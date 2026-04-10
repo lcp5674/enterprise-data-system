@@ -14,11 +14,6 @@
       "role": "Team Lead - coordinates the team and interacts with the user"
     },
     {
-      "memberId": "architect-lead@enterprise-data-dev-team",
-      "name": "architect-lead",
-      "role": "初始化项目脚手架"
-    },
-    {
       "memberId": "backend-dev-basic@enterprise-data-dev-team",
       "name": "backend-dev-basic",
       "role": "开发基础支撑域服务"
@@ -34,14 +29,24 @@
       "role": "开发资产治理域服务"
     },
     {
-      "memberId": "frontend-dev@enterprise-data-dev-team",
-      "name": "frontend-dev",
-      "role": "开发前端应用"
-    },
-    {
       "memberId": "devops-engineer@enterprise-data-dev-team",
       "name": "devops-engineer",
       "role": "配置基础设施"
+    },
+    {
+      "memberId": "backend-dev-knowledge@enterprise-data-dev-team",
+      "name": "backend-dev-knowledge",
+      "role": "开发知识智能域服务"
+    },
+    {
+      "memberId": "backend-dev-operation@enterprise-data-dev-team",
+      "name": "backend-dev-operation",
+      "role": "开发运营支撑域服务"
+    },
+    {
+      "memberId": "backend-dev-advanced@enterprise-data-dev-team",
+      "name": "backend-dev-advanced",
+      "role": "开发高级功能域服务"
     }
   ],
   "isAutoTeam": false

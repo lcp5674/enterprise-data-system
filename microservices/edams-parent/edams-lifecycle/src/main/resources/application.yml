@@ -1,0 +1,132 @@
+server:
+  port: 8087
+  servlet:
+    context-path: /lifecycle
+
+spring:
+  application:
+    name: edams-lifecycle
+  
+  # PostgreSQL数据源配置
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:edams_lifecycle}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      pool-name: LifecycleHikariCP
+  
+  # Redis配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 6
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+  
+  # Kafka配置
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      retries: 3
+      acks: all
+    consumer:
+      group-id: edams-lifecycle-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+
+# Nacos配置中心
+spring.cloud.nacos.config:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+  file-extension: yml
+  refresh-enabled: true
+
+# Nacos服务发现
+spring.cloud.nacos.discovery:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+
+# MinIO配置
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket-name: ${MINIO_BUCKET:edams-archives}
+
+# 生命周期配置
+lifecycle:
+  # 归档配置
+  archive:
+    # 归档文件保留天数
+    retention-days: 2555  # 7年
+    # 归档存储路径
+    storage-path: /data/archives
+    # 压缩格式
+    compression-format: zip
+  
+  # 清理配置
+  cleanup:
+    # 清理任务执行时间（cron表达式）
+    schedule: "0 0 2 * * ?"
+    # 批量清理大小
+    batch-size: 1000
+    # 清理前备份
+    backup-before-delete: true
+  
+  # 审计配置
+  audit:
+    # 审计日志保留天数
+    retention-days: 3650  # 10年
+    # 审计日志存储路径
+    storage-path: /data/audit-logs
+
+# JWT配置
+jwt:
+  secret: ${JWT_SECRET:edams-auth-secret-key-change-in-production-minimum-256-bits}
+  issuer: edams-auth
+
+# 开放API配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.edams: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Swagger配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true

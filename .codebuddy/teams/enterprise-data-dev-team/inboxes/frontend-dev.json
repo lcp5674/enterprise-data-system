@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "msg-1775803101261-api5ky",
+    "from": "team-lead",
+    "to": "frontend-dev",
+    "type": "message",
+    "content": "欢迎加入团队！你负责开发**企业数据资产管理系统的前端应用**。\n\n### 项目背景\n企业数据资产管理系统（EDAMS）是一个复杂的多域微服务架构，后端微服务框架已完成初始化。\n\n### 你的任务\n请负责开发前端应用（edams-web），基于已有设计：\n\n1. **技术栈**\n   - React 18 + TypeScript\n   - Ant Design Pro Components\n   - Umi Max\n   - 技术栈已定义在项目脚手架中\n\n2. **核心模块**\n   - 资产管理（列表、详情、编辑）\n   - 数据源管理（连接、配置）\n   - 数据目录（分类浏览）\n   - 数据地图（关系图谱）\n   - 搜索功能\n   - 治理工具（分级分类、质量规则）\n   - 工作流（审批流程）\n   - 个人中心/设置\n\n3. **已完成**\n   - 项目基础结构（edams-web目录）\n   - 服务层、Store层目录结构\n\n### 参考文档\n请先阅读以下文档：\n- 企业数据资产管理系统项目脚手架设计.md\n- 企业数据资产管理系统技术架构文档-最终版.md\n- 企业数据资产管理系统开发规范文档.md\n- edams-web目录下的现有代码\n\n### 项目位置\n`/System/Volumes/Data/data/GitCode/enterprise-data-system/edams-web`\n\n请开始工作，先熟悉项目结构，然后逐步实现各模块。完成后向我汇报进度。",
+    "timestamp": "2026-04-10T06:38:21.261Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775803708390-yjyo97",
+    "from": "team-lead",
+    "to": "frontend-dev",
+    "type": "message",
+    "content": "前端核心模块开发完成，表现优秀！\n\n已完成：\n- 8大核心模块（登录、首页、资产、目录、地图、质量、系统管理）\n- 基础框架（服务层、Store、布局、路由）\n- 代码量：10,476 行\n\n请继续完善：\n1. 图表可视化集成（ECharts）\n2. 血缘图 G6 可视化实现\n3. 单元测试编写\n\n等待其他团队成员完成后再统一部署。",
+    "timestamp": "2026-04-10T06:48:28.390Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775804229908-mr68m0",
+    "from": "team-lead",
+    "to": "frontend-dev",
+    "type": "message",
+    "content": "前端开发工作全部完成，非常出色！\n\n已确认完成：\n- ✅ ECharts 图表可视化（6种图表模板）\n- ✅ G6 血缘图可视化（交互功能完善）\n- ✅ 单元测试（5个测试文件）\n\n请待命，等待后端服务完成后统一部署。",
+    "timestamp": "2026-04-10T06:57:09.908Z",
+    "read": true
+  },
+  {
+    "id": "shutdown-1775806914731",
+    "from": "devops-engineer",
+    "to": "frontend-dev",
+    "type": "shutdown_request",
+    "content": "{\"type\":\"shutdown_request\",\"request_id\":\"shutdown-1775806914731\",\"reason\":\"基础设施配置工作已完成，生产环境已就绪。请确认完成状态。\",\"from\":\"devops-engineer\",\"timestamp\":\"2026-04-10T07:41:54.731Z\"}",
+    "timestamp": "2026-04-10T07:41:54.731Z",
+    "read": true
+  }
+]

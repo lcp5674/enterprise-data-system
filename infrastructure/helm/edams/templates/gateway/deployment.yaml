@@ -1,0 +1,142 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "edms.fullname" . }}-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "edms.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  annotations:
+    reloader.stakater.com/auto: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  selector:
+    matchLabels:
+      {{- include "edms.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        {{- include "edms.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/gateway/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- if .Values.security.podSecurityContext.enabled }}
+      securityContext:
+        {{- toYaml .Values.security.podSecurityContext | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "edms.fullname" . }}-gateway
+      containers:
+      - name: gateway
+        image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+        {{- if .Values.security.containerSecurityContext.enabled }}
+        securityContext:
+          {{- toYaml .Values.security.containerSecurityContext | nindent 10 }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: metrics
+          containerPort: 9000
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: {{ .Values.global.environment }}
+        - name: SERVER_PORT
+          value: "8080"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: http://eureka-service:8761/eureka/
+        - name: SPRING_PROFILES_ACTIVE
+          value: {{ .Values.global.environment }}
+        envFrom:
+        - configMapRef:
+            name: {{ include "edms.fullname" . }}-gateway-config
+        - secretRef:
+            name: {{ include "edms.fullname" . }}-gateway-secrets
+        resources:
+          {{- toYaml .Values.gateway.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /actuator/health/startup
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 30
+          successThreshold: 1
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+          readOnly: true
+        - name: logs-volume
+          mountPath: /logs
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "edms.fullname" . }}-gateway-config
+      - name: logs-volume
+        emptyDir: {}
+      {{- if .Values.gateway.image.pullSecrets }}
+      imagePullSecrets:
+      - name: {{ .Values.gateway.image.pullSecrets }}
+      {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                  - gateway
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "gateway"
+        effect: "NoSchedule"
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+{{- end }}

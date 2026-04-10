@@ -1,0 +1,593 @@
+# =====================================================
+# EDAMS - GitLab CI/CD Pipeline
+# 企业数据资产管理系统 - CI/CD流水线配置
+# =====================================================
+
+# 全局配置
+variables:
+  # 基础配置
+  MAVEN_CLI_OPTS: "-s .mvn/settings.xml --batch-mode"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  
+  # 镜像配置
+  REGISTRY_URL: "${CI_REGISTRY}"
+  REGISTRY_USER: "${CI_REGISTRY_USER}"
+  REGISTRY_PASS: "${CI_REGISTRY_PASSWORD}"
+  
+  # 镜像标签
+  IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
+  LATEST_TAG: "latest"
+  
+  # Kubernetes配置
+  K8S_NAMESPACE_PROD: "edams-prod"
+  K8S_NAMESPACE_STAGING: "edams-staging"
+  K8S_CONTEXT: "${K8S_CONTEXT}"
+  
+  # 应用配置
+  PROJECT_NAME: "enterprise-data-system"
+  DOCKER_FILE: "infrastructure/docker/Dockerfile"
+  
+  # SonarQube配置
+  SONAR_HOST_URL: "https://sonar.enterprise.com"
+  
+  # 跳过测试（在特定阶段）
+  MAVEN_SKIP_TESTS: "${MAVEN_SKIP_TESTS:-false}"
+
+# 缓存配置
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .m2/repository/
+    - target/
+  policy: pull-push
+
+# 阶段定义
+stages:
+  - validate     # 代码验证
+  - test         # 测试
+  - build        # 构建
+  - quality      # 代码质量检查
+  - security     # 安全扫描
+  - package      # 打包
+  - docker       # 构建Docker镜像
+  - deploy-staging  # 部署到测试环境
+  - integration-test # 集成测试
+  - performance-test # 性能测试
+  - deploy-prod      # 部署到生产环境
+  - notify       # 通知
+
+# 工作流规则
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      variables:
+        DEPLOY_ENVIRONMENT: "staging"
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      variables:
+        DEPLOY_ENVIRONMENT: "production"
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      variables:
+        DEPLOY_ENVIRONMENT: "staging"
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.*/'
+      variables:
+        DEPLOY_ENVIRONMENT: "staging"
+    - if: '$CI_COMMIT_TAG'  # 标签触发发布
+      variables:
+        DEPLOY_ENVIRONMENT: "production"
+        IMAGE_TAG: "${CI_COMMIT_TAG}"
+
+# =====================================================
+# 阶段1: 验证
+# =====================================================
+
+validate-code:
+  stage: validate
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    # 检查代码格式
+    - echo "📋 代码格式检查..."
+    - mvn $MAVEN_CLI_OPTS spotless:check
+    - echo "✅ 代码格式检查通过"
+    
+    # 依赖安全检查
+    - echo "📋 依赖安全检查..."
+    - mvn $MAVEN_CLI_OPTS org.owasp:dependency-check-maven:check
+    - echo "✅ 依赖安全检查完成"
+    
+    # 许可证检查
+    - echo "📋 许可证检查..."
+    - mvn $MAVEN_CLI_OPTS org.codehaus.mojo:license-maven-plugin:aggregate-add-third-party
+    - echo "✅ 许可证检查完成"
+  artifacts:
+    reports:
+      dependency_scanning:
+        - target/dependency-check-report.xml
+    paths:
+      - target/generated-sources/license/THIRD-PARTY.txt
+  allow_failure: false
+  tags:
+    - maven
+    - java17
+
+# =====================================================
+# 阶段2: 测试
+# =====================================================
+
+unit-tests:
+  stage: test
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - echo "🧪 执行单元测试..."
+    - mvn $MAVEN_CLI_OPTS clean test -DskipITs=true
+    
+    # 生成测试覆盖率报告
+    - mvn $MAVEN_CLI_OPTS jacoco:report
+    - echo "✅ 单元测试完成"
+  artifacts:
+    reports:
+      junit:
+        - "**/target/surefire-reports/TEST-*.xml"
+      coverage_report:
+        coverage_format: cobertura
+        path: "**/target/site/jacoco/jacoco.xml"
+    paths:
+      - target/site/jacoco/
+  coverage: '/Total.*?([0-9]{1,3})%/'
+  allow_failure: false
+  tags:
+    - maven
+    - java17
+
+integration-tests-ci:
+  stage: test
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - echo "🔧 环境准备..."
+    # 启动测试环境
+    - docker-compose -f infrastructure/docker/dev/docker-compose.yml up -d mysql redis
+    
+    - echo "🧪 执行集成测试..."
+    - mvn $MAVEN_CLI_OPTS clean verify -Dit.test=*IT -DskipTests=false
+    
+    # 等待测试完成
+    - sleep 30
+    - echo "✅ 集成测试完成"
+  artifacts:
+    reports:
+      junit:
+        - "**/target/failsafe-reports/TEST-*.xml"
+  dependencies:
+    - unit-tests
+  allow_failure: false
+  tags:
+    - docker
+    - maven
+
+# =====================================================
+# 阶段3: 构建
+# =====================================================
+
+build-java:
+  stage: build
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - echo "🔨 编译项目..."
+    - mvn $MAVEN_CLI_OPTS clean compile -DskipTests
+    - echo "✅ 编译完成"
+  artifacts:
+    paths:
+      - target/classes/
+      - target/*.jar
+  dependencies:
+    - unit-tests
+  tags:
+    - maven
+    - java17
+
+# =====================================================
+# 阶段4: 代码质量检查
+# =====================================================
+
+sonarqube-check:
+  stage: quality
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - echo "📊 运行SonarQube分析..."
+    - mvn $MAVEN_CLI_OPTS sonar:sonar
+      -Dsonar.projectKey=enterprise-data-system
+      -Dsonar.host.url=$SONAR_HOST_URL
+      -Dsonar.login=$SONAR_TOKEN
+      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+    - echo "✅ SonarQube分析完成"
+  dependencies:
+    - unit-tests
+  allow_failure: false
+  tags:
+    - sonarqube
+    - maven
+
+# =====================================================
+# 阶段5: 安全扫描
+# =====================================================
+
+sast-scan:
+  stage: security
+  image: registry.gitlab.com/gitlab-org/security-products/container-scanning:latest
+  script:
+    # SAST - 静态应用安全测试
+    - echo "🔒 执行静态应用安全扫描..."
+    - |
+      semgrep scan \
+        --config auto \
+        --metrics=off \
+        --json \
+        --output=sast-report.json
+    - echo "✅ SAST扫描完成"
+  artifacts:
+    reports:
+      sast: sast-report.json
+    expire_in: 1 week
+  tags:
+    - security
+    - docker
+
+container-scanning:
+  stage: security
+  image: registry.gitlab.com/gitlab-org/security-products/container-scanning:latest
+  script:
+    # 容器安全扫描
+    - echo "📦 执行容器安全扫描..."
+    - |
+      trivy image \
+        --format template \
+        --template "@/contrib/gitlab.tpl" \
+        --output container-scanning-report.json \
+        $REGISTRY_URL/$CI_PROJECT_PATH:$IMAGE_TAG
+    - echo "✅ 容器安全扫描完成"
+  artifacts:
+    reports:
+      container_scanning: container-scanning-report.json
+    expire_in: 1 week
+  dependencies:
+    - docker-build
+  tags:
+    - security
+    - docker
+
+# =====================================================
+# 阶段6: 打包
+# =====================================================
+
+package-services:
+  stage: package
+  image: maven:3.9.4-eclipse-temurin-17
+  script:
+    - echo "📦 打包服务..."
+    # 打包所有模块
+    - mvn $MAVEN_CLI_OPTS clean package -DskipTests -Pprod
+    
+    # 生成部署包
+    - mkdir -p deploy
+    - cp edams-gateway/target/*.jar deploy/edams-gateway.jar
+    - cp edams-auth/target/*.jar deploy/edams-auth.jar
+    - cp edams-asset/target/*.jar deploy/edams-asset.jar
+    
+    - echo "✅ 打包完成"
+  artifacts:
+    paths:
+      - deploy/
+  dependencies:
+    - build-java
+    - sonarqube-check
+  tags:
+    - maven
+    - java17
+
+# =====================================================
+# 阶段7: Docker构建
+# =====================================================
+
+docker-build:
+  stage: docker
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    # 登录Docker Registry
+    - echo "🔑 登录到容器镜像仓库..."
+    - echo $REGISTRY_PASS | docker login -u $REGISTRY_USER --password-stdin $REGISTRY_URL
+    
+    # 构建网关服务镜像
+    - echo "🐳 构建网关服务镜像..."
+    - |
+      docker build \
+        -f infrastructure/docker/Dockerfile \
+        --build-arg BUILD_PROFILE=prod \
+        --target runtime \
+        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG \
+        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$LATEST_TAG \
+        .
+    
+    # 构建认证服务镜像
+    - echo "🐳 构建认证服务镜像..."
+    - cp edams-auth/target/*.jar deploy/app.jar
+    - |
+      docker build \
+        -f infrastructure/docker/Dockerfile \
+        --build-arg BUILD_PROFILE=prod \
+        --target runtime \
+        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG \
+        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$LATEST_TAG \
+        .
+    
+    # 推送镜像
+    - echo "🚀 推送镜像到仓库..."
+    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG
+    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$LATEST_TAG
+    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG
+    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$LATEST_TAG
+    
+    - echo "✅ Docker镜像构建完成"
+  dependencies:
+    - package-services
+  tags:
+    - docker
+    - dind
+
+# =====================================================
+# 阶段8: 部署到测试环境
+# =====================================================
+
+deploy-staging:
+  stage: deploy-staging
+  image: bitnami/kubectl:latest
+  script:
+    - echo "🚀 部署到测试环境..."
+    
+    # 设置kubectl上下文
+    - kubectl config use-context $K8S_CONTEXT
+    
+    # 更新镜像版本
+    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_STAGING
+    - kubectl set image deployment/edams-auth edams-auth=$REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG -n $K8S_NAMESPACE_STAGING
+    
+    # 等待部署完成
+    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_STAGING --timeout=300s
+    - kubectl rollout status deployment/edams-auth -n $K8S_NAMESPACE_STAGING --timeout=300s
+    
+    # 验证部署
+    - kubectl get pods -n $K8S_NAMESPACE_STAGING -l app=edams-gateway
+    - kubectl get pods -n $K8S_NAMESPACE_STAGING -l app=edams-auth
+    
+    - echo "✅ 测试环境部署完成"
+  environment:
+    name: staging
+    url: https://staging.edams.com
+  dependencies:
+    - docker-build
+  only:
+    - develop
+    - merge_requests
+  tags:
+    - kubernetes
+    - kubectl
+
+# =====================================================
+# 阶段9: 集成测试
+# =====================================================
+
+api-integration-test:
+  stage: integration-test
+  image: curlimages/curl:latest
+  script:
+    # 等待服务启动
+    - echo "⏳ 等待服务启动..."
+    - timeout 300 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://staging.edams.com/api/health)" != "200" ]]; do sleep 5; done'
+    
+    # 执行API测试
+    - echo "🧪 执行API集成测试..."
+    
+    # 测试认证API
+    - |
+      auth_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+        "https://staging.edams.com/auth/api/v1/login" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"test_user","password":"test_password"}')
+      echo "认证测试响应码: $auth_response"
+      if [ "$auth_response" != "200" ]; then exit 1; fi
+    
+    # 测试资产API
+    - |
+      asset_response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+        "https://staging.edams.com/api/v1/assets" \
+        -H "Authorization: Bearer $TEST_TOKEN")
+      echo "资产API测试响应码: $asset_response"
+      if [ "$asset_response" != "200" ]; then exit 1; fi
+    
+    - echo "✅ 集成测试通过"
+  dependencies:
+    - deploy-staging
+  allow_failure: false
+  only:
+    - develop
+  tags:
+    - api-test
+
+# =====================================================
+# 阶段10: 性能测试
+# =====================================================
+
+performance-test:
+  stage: performance-test
+  image: alpine/curl:latest
+  script:
+    - echo "⚡ 执行性能测试..."
+    
+    # 使用k6进行性能测试
+    - apk add --no-cache k6
+    
+    # 简单的性能测试脚本
+    - cat > performance-test.js << EOF
+      import http from 'k6/http';
+      import { check, sleep } from 'k6';
+      import { Rate } from 'k6/metrics';
+      
+      export let errorRate = new Rate('errors');
+      
+      export let options = {
+        stages: [
+          { duration: '30s', target: 50 },
+          { duration: '1m', target: 100 },
+          { duration: '30s', target: 50 },
+          { duration: '30s', target: 0 },
+        ],
+        thresholds: {
+          http_req_duration: ['p(95)<500'],
+          errors: ['rate<0.1']
+        }
+      };
+      
+      export default function() {
+        const res = http.get('https://staging.edams.com/api/v1/assets');
+        const checkRes = check(res, {
+          'status is 200': (r) => r.status === 200,
+          'response time < 500ms': (r) => r.timings.duration < 500
+        });
+        
+        errorRate.add(!checkRes);
+        sleep(1);
+      }
+      EOF
+    
+    # 执行性能测试
+    - k6 run performance-test.js
+    
+    - echo "✅ 性能测试完成"
+  dependencies:
+    - api-integration-test
+  allow_failure: false
+  only:
+    - develop
+  tags:
+    - performance
+
+# =====================================================
+# 阶段11: 生产环境部署
+# =====================================================
+
+deploy-production:
+  stage: deploy-prod
+  image: bitnami/kubectl:latest
+  script:
+    # 生产环境部署需要手动确认
+    - echo "🚀 部署到生产环境 (需要手动批准)..."
+    - echo "✅ 生产环境部署准备就绪"
+  environment:
+    name: production
+    url: https://api.edams.com
+  only:
+    - main
+  when: manual
+  tags:
+    - kubernetes
+    - production
+
+# 实际的部署任务（在手动批准后执行）
+deploy-production-execute:
+  stage: deploy-prod
+  image: bitnami/kubectl:latest
+  script:
+    - echo "🚀 执行生产环境部署..."
+    
+    # 设置kubectl上下文
+    - kubectl config use-context $K8S_CONTEXT
+    
+    # 备份当前版本（用于回滚）
+    - kubectl get deployment edams-gateway -n $K8S_NAMESPACE_PROD -o yaml > edams-gateway-backup.yaml
+    - kubectl get deployment edams-auth -n $K8S_NAMESPACE_PROD -o yaml > edams-auth-backup.yaml
+    
+    # 更新生产环境镜像
+    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
+    - kubectl set image deployment/edams-auth edams-auth=$REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
+    
+    # 执行金丝雀发布（逐步更新）
+    - echo "🐦 执行金丝雀发布..."
+    - kubectl rollout pause deployment/edams-gateway -n $K8S_NAMESPACE_PROD
+    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
+    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_PROD
+    - kubectl rollout resume deployment/edams-gateway -n $K8S_NAMESPACE_PROD
+    
+    # 等待部署完成
+    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_PROD --timeout=600s
+    - kubectl rollout status deployment/edams-auth -n $K8S_NAMESPACE_PROD --timeout=600s
+    
+    # 验证生产环境部署
+    - echo "✅ 验证生产环境..."
+    - kubectl get pods -n $K8S_NAMESPACE_PROD -l app=edams-gateway
+    - kubectl get pods -n $K8S_NAMESPACE_PROD -l app=edams-auth
+    
+    # 健康检查
+    - timeout 300 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://api.edams.com/api/health)" != "200" ]]; do sleep 5; done'
+    
+    - echo "✅ 生产环境部署完成"
+  environment:
+    name: production
+    url: https://api.edams.com
+  dependencies:
+    - deploy-production
+  only:
+    - main
+  tags:
+    - kubernetes
+    - production
+
+# =====================================================
+# 阶段12: 通知
+# =====================================================
+
+notify-slack:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    # 通知Slack
+    - echo "📢 发送通知到Slack..."
+    - |
+      if [ "$CI_JOB_STATUS" = "success" ]; then
+        MESSAGE="✅ Pipeline成功完成！\n项目: $CI_PROJECT_TITLE\n分支: $CI_COMMIT_REF_NAME\n提交: $CI_COMMIT_TITLE\n流水线: $CI_PIPELINE_URL"
+      else
+        MESSAGE="❌ Pipeline失败！\n项目: $CI_PROJECT_TITLE\n分支: $CI_COMMIT_REF_NAME\n提交: $CI_COMMIT_TITLE\n失败阶段: $CI_JOB_NAME\n流水线: $CI_PIPELINE_URL"
+      fi
+      
+      curl -X POST $SLACK_WEBHOOK_URL \
+        -H 'Content-type: application/json' \
+        --data "{\"text\":\"$MESSAGE\"}"
+    - echo "✅ 通知发送完成"
+  when: always
+  tags:
+    - notify
+
+notify-email:
+  stage: notify
+  image: alpine/curl:latest
+  script:
+    # 发送邮件通知
+    - echo "📧 发送邮件通知..."
+    # 这里可以集成邮件服务
+    - echo "✅ 邮件通知准备就绪"
+  when: on_failure
+  tags:
+    - notify
+
+# =====================================================
+# 清理任务
+# =====================================================
+
+cleanup:
+  stage: .post
+  script:
+    - echo "🧹 清理工作空间..."
+    # 清理Docker缓存
+    - docker system prune -f
+  when: always
+  tags:
+    - cleanup

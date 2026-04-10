@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: sla-service
+  profiles:
+    active: dev
+
+server:
+  port: 8088
+
+spring.cloud.nacos.discovery.server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+spring.cloud.nacos.discovery.namespace: ${NACOS_NAMESPACE:dev}
+spring.cloud.nacos.config.server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+spring.cloud.nacos.config.namespace: ${NACOS_NAMESPACE:dev}
+
+spring.datasource.driver-class-name: org.postgresql.Driver
+spring.datasource.url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edams_sla}
+spring.datasource.username: ${POSTGRES_USERNAME:postgres}
+spring.datasource.password: ${POSTGRES_PASSWORD:postgres123}
+
+spring.jpa.database-platform: org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.hibernate.ddl-auto: update
+spring.jpa.show-sql: false
+
+management.endpoints.web.exposure.include: health,info,metrics
+management.endpoint.health.show-details: always
+
+springdoc.api-docs.enabled: true
+springdoc.swagger-ui.enabled: true
+
+logging.level.root: INFO
+logging.level.com.enterprise.edams: DEBUG
+
+# SLA配置
+sla:
+  check-interval: 60000  # SLA检查间隔(ms)
+  alert-threshold: 0.95  # 告警阈值
+  recovery-threshold: 0.98  # 恢复阈值

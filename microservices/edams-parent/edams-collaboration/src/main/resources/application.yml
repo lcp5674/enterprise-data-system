@@ -1,0 +1,59 @@
+server:
+  port: 8089
+  servlet:
+    context-path: /collaboration
+
+spring:
+  application:
+    name: edams-collaboration
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:edams_collaboration}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      pool-name: CollaborationHikariCP
+  
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/edams_collaboration}
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 8
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+
+spring.cloud.nacos.config:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+  file-extension: yml
+
+spring.cloud.nacos.discovery:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+
+jwt:
+  secret: ${JWT_SECRET:edams-auth-secret-key-change-in-production-minimum-256-bits}
+  issuer: edams-auth
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true

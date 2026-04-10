@@ -1,0 +1,652 @@
+# =====================================================
+# EDAMS - ArgoCD Application Sets
+# 企业数据资产管理系统 - GitOps 应用集配置
+# =====================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-applications
+  namespace: argocd
+spec:
+  generators:
+    # 基于目录结构生成应用
+    - git:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        revision: HEAD
+        directories:
+          - path: infrastructure/ci-cd/argo-cd/applications/staging
+            exclude: false
+          - path: infrastructure/ci-cd/argo-cd/applications/production
+            exclude: false
+      
+    # 基于集群类型生成应用
+    - clusters:
+        selector:
+          matchLabels:
+            environment: production
+        
+    # 基于Pull Request生成预览环境应用
+    - pull-request:
+        github:
+          owner: enterprise
+          repo: enterprise-data-system
+          api: https://api.github.com/
+          tokenRef:
+            secretName: github-token
+            key: token
+        requeueAfterSeconds: 180
+
+  template:
+    metadata:
+      name: '{{path.basename}}-{{cluster.name}}'
+      annotations:
+        argocd.argoproj.io/manifest-generate-paths: "."
+        kustomize.toolkit.fluxcd.io/name: '{{path.basename}}'
+        kustomize.toolkit.fluxcd.io/namespace: '{{cluster.metadata.labels.environment}}'
+    spec:
+      project: default
+      
+      # 源配置
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: HEAD
+        path: '{{path}}'
+        helm:
+          valueFiles:
+            - values-{{cluster.metadata.labels.environment}}.yaml
+      
+      # 目标配置
+      destination:
+        server: '{{server}}'
+        namespace: '{{cluster.metadata.labels.environment}}'
+      
+      # 同步策略
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - RespectIgnoreDifferences=true
+          - Validate=true
+        
+        # 保留资源策略
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+        
+        # 钩子配置
+        managedNamespaceMetadata:
+          labels:
+            managed-by: argocd
+            environment: '{{cluster.metadata.labels.environment}}'
+          annotations:
+            argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+        
+        # 资源清理
+        prunePropagationPolicy: foreground
+        preserveResourcesOnDeletion: false
+
+---
+# =====================================================
+# 多环境应用配置
+# =====================================================
+
+# 开发环境应用集
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-dev-applications
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: dev-cluster
+            environment: dev
+            namespace: edams-dev
+            replicas: 1
+            resources.limits.cpu: "500m"
+            resources.limits.memory: "1Gi"
+            image.tag: latest
+
+  template:
+    metadata:
+      name: "edams-dev-{{name}}"
+      labels:
+        environment: dev
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: dev
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: dev
+        path: "infrastructure/ci-cd/argo-cd/applications/dev/{{name}}"
+        helm:
+          parameters:
+            - name: replicas
+              value: "{{replicas}}"
+            - name: image.tag
+              value: "{{image.tag}}"
+            - name: resources.limits.cpu
+              value: "{{resources.limits.cpu}}"
+            - name: resources.limits.memory
+              value: "{{resources.limits.memory}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - Validate=false
+
+---
+# 测试环境应用集
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-staging-applications
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: staging-cluster
+            environment: staging
+            namespace: edams-staging
+            replicas: 2
+            resources.limits.cpu: "1000m"
+            resources.limits.memory: "2Gi"
+            image.tag: staging-latest
+
+  template:
+    metadata:
+      name: "edams-staging-{{name}}"
+      labels:
+        environment: staging
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: staging
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: staging
+        path: "infrastructure/ci-cd/argo-cd/applications/staging/{{name}}"
+        helm:
+          parameters:
+            - name: replicas
+              value: "{{replicas}}"
+            - name: image.tag
+              value: "{{image.tag}}"
+            - name: resources.limits.cpu
+              value: "{{resources.limits.cpu}}"
+            - name: resources.limits.memory
+              value: "{{resources.limits.memory}}"
+      destination:
+        server: https://kubernetes.staging.svc
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - Validate=true
+
+---
+# 生产环境应用集
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-prod-applications
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - cluster: prod-cluster-1
+            environment: production
+            region: us-east-1
+            namespace: edams-prod-us
+            replicas: 3
+            resources.limits.cpu: "2000m"
+            resources.limits.memory: "4Gi"
+            image.tag: v1.0.0
+            ingress.host: api.edams.com
+          
+          - cluster: prod-cluster-2
+            environment: production
+            region: eu-west-1
+            namespace: edams-prod-eu
+            replicas: 2
+            resources.limits.cpu: "2000m"
+            resources.limits.memory: "4Gi"
+            image.tag: v1.0.0
+            ingress.host: api-eu.edams.com
+
+  template:
+    metadata:
+      name: "edams-prod-{{region}}-{{name}}"
+      labels:
+        environment: production
+        region: "{{region}}"
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: production
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: main
+        path: "infrastructure/ci-cd/argo-cd/applications/production/{{name}}"
+        helm:
+          parameters:
+            - name: replicas
+              value: "{{replicas}}"
+            - name: image.tag
+              value: "{{image.tag}}"
+            - name: resources.limits.cpu
+              value: "{{resources.limits.cpu}}"
+            - name: resources.limits.memory
+              value: "{{resources.limits.memory}}"
+            - name: ingress.host
+              value: "{{ingress.host}}"
+            - name: region
+              value: "{{region}}"
+      destination:
+        server: "{{cluster}}"
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - Validate=true
+          - PrunePropagationPolicy=foreground
+        
+        # 回滚策略
+        retry:
+          limit: 3
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
+
+---
+# =====================================================
+# PR预览环境应用集
+# =====================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-preview-applications
+  namespace: argocd
+spec:
+  generators:
+    - pull-request:
+        github:
+          owner: enterprise
+          repo: enterprise-data-system
+          api: https://api.github.com/
+          tokenRef:
+            secretName: github-token
+            key: token
+        requeueAfterSeconds: 300
+        
+        # PR过滤器
+        filters:
+          - branch-match: "^feature/.*"
+          - state: open
+
+  template:
+    metadata:
+      name: "edams-preview-pr-{{number}}"
+      labels:
+        environment: preview
+        pr-number: "{{number}}"
+        pr-author: "{{author}}"
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+        preview-url: https://pr-{{number}}.preview.edams.com
+        
+        # 自动清理配置
+        argocd.argoproj.io/sync-options: Prune=true
+        argocd.argoproj.io/prune-timeout: "3600"
+        
+        # 过期时间 (24小时)
+        argocd.argoproj.io/expiration-time: "24h"
+
+    spec:
+      project: preview
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: "{{head_sha}}"
+        path: "infrastructure/ci-cd/argo-cd/applications/preview"
+        helm:
+          parameters:
+            - name: pr.number
+              value: "{{number}}"
+            - name: pr.branch
+              value: "{{branch}}"
+            - name: pr.author
+              value: "{{author}}"
+            - name: pr.title
+              value: "{{title}}"
+            - name: environment
+              value: preview
+            - name: replicas
+              value: "1"
+            - name: resources.limits.cpu
+              value: "500m"
+            - name: resources.limits.memory
+              value: "1Gi"
+            - name: ingress.host
+              value: "pr-{{number}}.preview.edams.com"
+            
+            # 数据库配置（使用临时数据库）
+            - name: database.enabled
+              value: "true"
+            - name: database.type
+              value: "ephemeral"
+            - name: database.expireAfter
+              value: "24h"
+
+      destination:
+        server: https://kubernetes.preview.svc
+        namespace: "edams-preview-pr-{{number}}"
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          
+        # 同步选项
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - Validate=false
+          - RespectIgnoreDifferences=true
+        
+        # 资源钩子
+        managedNamespaceMetadata:
+          labels:
+            managed-by: argocd
+            environment: preview
+            pr-number: "{{number}}"
+        
+        # 同步失败重试
+        retry:
+          limit: 3
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 1m
+
+---
+# =====================================================
+# 基础设施应用集 (数据库、中间件等)
+# =====================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-infrastructure-applications
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: redis-cluster
+            type: cache
+            cluster: prod-cluster-1
+            namespace: edams-data
+            
+          - name: mysql-cluster
+            type: database
+            cluster: prod-cluster-1
+            namespace: edams-data
+            
+          - name: kafka-cluster
+            type: messaging
+            cluster: prod-cluster-1
+            namespace: edams-data
+            
+          - name: elasticsearch-cluster
+            type: search
+            cluster: prod-cluster-1
+            namespace: edams-data
+            
+          - name: monitoring-stack
+            type: monitoring
+            cluster: prod-cluster-1
+            namespace: monitoring
+
+  template:
+    metadata:
+      name: "edams-{{type}}-{{name}}"
+      labels:
+        component: infrastructure
+        type: "{{type}}"
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: infrastructure
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: main
+        path: "infrastructure/ci-cd/argo-cd/infrastructure/{{type}}/{{name}}"
+        helm:
+          parameters:
+            - name: cluster
+              value: "{{cluster}}"
+            - name: namespace
+              value: "{{namespace}}"
+      destination:
+        server: "{{cluster}}"
+        namespace: "{{namespace}}"
+      syncPolicy:
+        automated:
+          prune: false  # 基础设施不自动删除
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - Validate=true
+        
+        # 基础设施有特殊的同步策略
+        managedNamespaceMetadata:
+          labels:
+            managed-by: argocd
+            component: infrastructure
+            infra-type: "{{type}}"
+        
+        # 冲突解决策略
+        ignoreDifferences:
+          - group: apps
+            kind: StatefulSet
+            jsonPointers:
+              - /spec/replicas
+          
+          - group: ""
+            kind: PersistentVolumeClaim
+            jsonPointers:
+              - /spec/resources/requests/storage
+
+---
+# =====================================================
+# 跨集群同步策略
+# =====================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-cross-cluster-applications
+  namespace: argocd
+spec:
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  type: primary
+          
+          - list:
+              elements:
+                - name: config-sync
+                  path: config
+                
+                - name: secret-sync
+                  path: secrets
+
+  template:
+    metadata:
+      name: "cross-cluster-{{cluster.name}}-{{name}}"
+      labels:
+        type: cross-cluster
+        sync-type: "{{name}}"
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: cross-cluster
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: main
+        path: "infrastructure/ci-cd/argo-cd/cross-cluster/{{path}}"
+        
+        # 插件配置
+        plugin:
+          name: config-management-plugin
+          env:
+            - name: CLUSTER_NAME
+              value: "{{cluster.name}}"
+            - name: SYNC_TYPE
+              value: "{{name}}"
+
+      destination:
+        server: "{{cluster.address}}"
+        namespace: kube-system
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        
+        # 跨集群同步的特殊选项
+        syncOptions:
+          - CreateNamespace=true
+          - FailOnSharedResource=true
+          - RespectIgnoreDifferences=true
+        
+        # 同步波次
+        syncWave: 10
+        
+        # 健康检查
+        healthCheck:
+          enabled: true
+          timeoutSeconds: 300
+          retryIntervalSeconds: 30
+        
+        # 资源钩子
+        hooks:
+          - name: pre-sync
+            kind: Job
+            metadata:
+              name: "pre-sync-{{cluster.name}}"
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: pre-sync
+                      image: alpine/k8s:1.27
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          echo "开始跨集群同步到 {{cluster.name}}"
+                          kubectl cluster-info
+                          exit 0
+                  restartPolicy: OnFailure
+
+---
+# =====================================================
+# 回滚策略配置
+# =====================================================
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: edams-rollback-strategies
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: blue-green
+            strategy: blue-green
+            maxSurge: 1
+            maxUnavailable: 0
+            
+          - name: canary
+            strategy: canary
+            steps: 3
+            interval: 5m
+            
+          - name: rolling
+            strategy: rolling
+            maxSurge: 1
+            maxUnavailable: 25%
+
+  template:
+    metadata:
+      name: "rollback-strategy-{{strategy}}"
+      labels:
+        type: rollback-strategy
+        strategy: "{{strategy}}"
+        app.kubernetes.io/part-of: enterprise-data-asset-management-system
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/enterprise/enterprise-data-system.git
+        targetRevision: main
+        path: "infrastructure/ci-cd/argo-cd/strategies/{{strategy}}"
+        helm:
+          parameters:
+            - name: strategy
+              value: "{{strategy}}"
+            - name: maxSurge
+              value: "{{maxSurge}}"
+            - name: maxUnavailable
+              value: "{{maxUnavailable}}"
+            - name: steps
+              value: "{{steps}}"
+            - name: interval
+              value: "{{interval}}"
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        
+        # 策略不需要自动同步
+        syncOptions:
+          - CreateNamespace=false
+          - ApplyOutOfSyncOnly=true
+        
+        # 忽略差异
+        ignoreDifferences:
+          - group: argoproj.io
+            kind: Application
+            jsonPointers:
+              - /spec
+              - /metadata/annotations
+              - /metadata/labels

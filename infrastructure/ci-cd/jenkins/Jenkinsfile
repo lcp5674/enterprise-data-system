@@ -1,0 +1,1097 @@
+// =====================================================
+// EDAMS - Jenkins Pipeline
+// 企业数据资产管理系统 - Jenkins流水线配置
+// =====================================================
+
+pipeline {
+    agent {
+        kubernetes {
+            label 'edams-jenkins-agent'
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: edams-jenkins-agent
+spec:
+  serviceAccountName: jenkins-agent-sa
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  - name: maven
+    image: maven:3.9.4-eclipse-temurin-17
+    command: ["cat"]
+    tty: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "1Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+    volumeMounts:
+    - name: maven-cache
+      mountPath: /root/.m2
+  - name: docker
+    image: docker:dind
+    securityContext:
+      privileged: true
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+    env:
+    - name: DOCKER_TLS_CERTDIR
+      value: ""
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command: ["cat"]
+    tty: true
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  - name: helm
+    image: alpine/helm:3.13.0
+    command: ["cat"]
+    tty: true
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  - name: trivy
+    image: aquasec/trivy:latest
+    command: ["cat"]
+    tty: true
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+  volumes:
+  - name: maven-cache
+    persistentVolumeClaim:
+      claimName: maven-cache-pvc
+'''
+        }
+    }
+
+    // 环境变量
+    environment {
+        // 项目配置
+        PROJECT_NAME = 'enterprise-data-system'
+        PROJECT_VERSION = '1.0.0'
+        
+        // Docker配置
+        DOCKER_REGISTRY = credentials('docker-registry')
+        DOCKER_REGISTRY_URL = 'registry.enterprise.com'
+        DOCKER_NAMESPACE = 'edams'
+        DOCKER_TAG = "${env.BUILD_NUMBER}"
+        DOCKER_LATEST_TAG = 'latest'
+        
+        // Kubernetes配置
+        K8S_CONTEXT = credentials('k8s-context')
+        K8S_NAMESPACE_DEV = 'edams-dev'
+        K8S_NAMESPACE_STAGING = 'edams-staging'
+        K8S_NAMESPACE_PROD = 'edams-prod'
+        
+        // 代码质量
+        SONAR_URL = 'https://sonar.enterprise.com'
+        SONAR_TOKEN = credentials('sonar-token')
+        
+        // 构建缓存
+        MAVEN_OPTS = '-Dmaven.repo.local=/root/.m2/repository'
+        
+        // Git配置
+        GIT_BRANCH = env.GIT_BRANCH
+        GIT_COMMIT = env.GIT_COMMIT
+        
+        // 其他配置
+        SKIP_TESTS = 'false'
+        BUILD_PROFILE = 'prod'
+    }
+
+    // 参数
+    parameters {
+        choice(
+            name: 'DEPLOY_ENVIRONMENT',
+            choices: ['dev', 'staging', 'production'],
+            description: '选择部署环境'
+        )
+        
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: '跳过测试'
+        )
+        
+        booleanParam(
+            name: 'RUN_SECURITY_SCAN',
+            defaultValue: true,
+            description: '执行安全扫描'
+        )
+        
+        booleanParam(
+            name: 'RUN_PERFORMANCE_TEST',
+            defaultValue: false,
+            description: '执行性能测试'
+        )
+        
+        string(
+            name: 'IMAGE_TAG_SUFFIX',
+            defaultValue: '',
+            description: '镜像标签后缀'
+        )
+    }
+
+    // 选项
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '10'))
+        timeout(time: 2, unit: 'HOURS')
+        timestamps()
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+        
+        // 保留构建产物
+        preserveBuilds(true)
+        
+        // 跳过上游触发
+        skipDefaultCheckout()
+    }
+
+    // 触发器
+    triggers {
+        // GitHub Webhook
+        githubPush()
+        
+        // 定时构建
+        cron('H 2 * * 1-5')  // 工作日凌晨2点
+        
+        // 轮询SCM
+        pollSCM('H/5 * * * *')
+    }
+
+    // 阶段定义
+    stages {
+        // 阶段1: 代码检出
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "🔍 检出代码..."
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${GIT_BRANCH}"]],
+                        extensions: [
+                            [
+                                $class: 'CloneOption',
+                                depth: 1,
+                                noTags: false,
+                                shallow: true,
+                                timeout: 10
+                            ],
+                            [
+                                $class: 'CleanBeforeCheckout'
+                            ],
+                            [
+                                $class: 'RelativeTargetDirectory',
+                                relativeTargetDir: '.'
+                            ]
+                        ],
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/enterprise/enterprise-data-system.git',
+                            credentialsId: 'github-credentials'
+                        ]]
+                    ])
+                    
+                    // 获取当前版本
+                    sh """
+                        git describe --tags --abbrev=0 > VERSION || echo "1.0.0" > VERSION
+                    """
+                    env.PROJECT_VERSION = readFile('VERSION').trim()
+                    echo "📦 项目版本: ${env.PROJECT_VERSION}"
+                }
+            }
+        }
+
+        // 阶段2: 代码验证
+        stage('Validate') {
+            steps {
+                container('maven') {
+                    script {
+                        echo "📋 代码验证..."
+                        
+                        // 检查代码格式
+                        sh """
+                            mvn spotless:check -B -q
+                        """
+                        
+                        // 检查依赖安全性
+                        sh """
+                            mvn org.owasp:dependency-check-maven:check \
+                                -Dformat=XML \
+                                -DoutputDirectory=target \
+                                -B -q
+                        """
+                        
+                        // 许可证检查
+                        sh """
+                            mvn org.codehaus.mojo:license-maven-plugin:aggregate-add-third-party \
+                                -Dlicense.thirdPartyFilename=THIRD-PARTY.txt \
+                                -Dlicense.excludedScopes=test,provided \
+                                -B -q
+                        """
+                        
+                        echo "✅ 代码验证通过"
+                    }
+                }
+                
+                // 归档产物
+                post {
+                    success {
+                        archiveArtifacts artifacts: 'target/THIRD-PARTY.txt', allowEmptyArchive: true
+                        archiveArtifacts artifacts: 'target/dependency-check-report.xml', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+
+        // 阶段3: 单元测试
+        stage('Unit Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        echo "🧪 执行单元测试..."
+                        
+                        sh """
+                            mvn clean test \
+                                -DskipITs=true \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -B -q
+                        """
+                        
+                        echo "✅ 单元测试完成"
+                    }
+                }
+                
+                // 测试报告
+                post {
+                    always {
+                        junit '**/target/surefire-reports/TEST-*.xml'
+                        
+                        // JaCoCo覆盖率报告
+                        sh """
+                            mvn jacoco:report -B -q > /dev/null 2>&1 || true
+                        """
+                        
+                        // 归档覆盖率报告
+                        archiveArtifacts artifacts: '**/target/site/jacoco/**', allowEmptyArchive: true
+                        
+                        // 记录覆盖率
+                        cobertura autoUpdateHealth: false,
+                                  autoUpdateStability: false,
+                                  coberturaReportFile: '**/target/site/jacoco/jacoco.xml',
+                                  conditionalCoverageTargets: '70, 0, 0',
+                                  failNoReports: true,
+                                  failUnhealthy: false,
+                                  failUnstable: false,
+                                  lineCoverageTargets: '80, 0, 0',
+                                  maxNumberOfBuilds: 0,
+                                  methodCoverageTargets: '80, 0, 0',
+                                  onlyStable: false,
+                                  sourceEncoding: 'UTF_8',
+                                  zoomCoverageChart: false
+                    }
+                }
+            }
+        }
+
+        // 阶段4: 集成测试
+        stage('Integration Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        echo "🔧 执行集成测试..."
+                        
+                        // 启动测试环境
+                        container('docker') {
+                            sh """
+                                docker-compose -f infrastructure/docker/dev/docker-compose.yml up -d mysql redis
+                                sleep 30
+                            """
+                        }
+                        
+                        // 执行集成测试
+                        sh """
+                            mvn verify \
+                                -Dit.test=*IT \
+                                -DskipTests=false \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -B -q
+                        """
+                        
+                        echo "✅ 集成测试完成"
+                    }
+                }
+                
+                // 清理测试环境
+                post {
+                    always {
+                        container('docker') {
+                            sh """
+                                docker-compose -f infrastructure/docker/dev/docker-compose.yml down -v || true
+                            """
+                        }
+                        
+                        // 归档集成测试报告
+                        junit '**/target/failsafe-reports/TEST-*.xml'
+                    }
+                }
+            }
+        }
+
+        // 阶段5: 代码质量分析
+        stage('Code Quality') {
+            steps {
+                container('maven') {
+                    script {
+                        echo "📊 代码质量分析..."
+                        
+                        sh """
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=enterprise-data-system \
+                                -Dsonar.host.url=${SONAR_URL} \
+                                -Dsonar.login=${SONAR_TOKEN} \
+                                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                                -Dsonar.java.binaries=target/classes \
+                                -B -q
+                        """
+                        
+                        echo "✅ 代码质量分析完成"
+                    }
+                }
+            }
+        }
+
+        // 阶段6: 安全扫描
+        stage('Security Scan') {
+            when {
+                expression { params.RUN_SECURITY_SCAN == true }
+            }
+            steps {
+                // SAST - 静态应用安全测试
+                container('trivy') {
+                    script {
+                        echo "🔒 执行安全扫描..."
+                        
+                        // 扫描源代码
+                        sh """
+                            trivy fs . \
+                                --format template \
+                                --template "@contrib/sarif.tpl" \
+                                --output sast-report.sarif \
+                                --severity HIGH,CRITICAL \
+                                --exit-code 0
+                        """
+                        
+                        echo "✅ 安全扫描完成"
+                    }
+                }
+                
+                // DAST - 动态应用安全测试 (在部署后执行)
+                // SCA - 软件组成分析
+                container('maven') {
+                    sh """
+                        mvn org.owasp:dependency-check-maven:aggregate \
+                            -Dformat=HTML \
+                            -DoutputDirectory=target \
+                            -B -q
+                    """
+                }
+                
+                // 归档安全报告
+                post {
+                    always {
+                        archiveArtifacts artifacts: 'sast-report.sarif', allowEmptyArchive: true
+                        archiveArtifacts artifacts: 'target/dependency-check-report.html', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+
+        // 阶段7: 构建
+        stage('Build') {
+            steps {
+                container('maven') {
+                    script {
+                        echo "🔨 构建项目..."
+                        
+                        // 确定构建配置文件
+                        def buildProfile = params.DEPLOY_ENVIRONMENT == 'production' ? 'prod' : 'dev'
+                        
+                        sh """
+                            mvn clean compile \
+                                -P${buildProfile} \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -DskipTests \
+                                -B -q
+                        """
+                        
+                        echo "✅ 构建完成"
+                    }
+                }
+            }
+        }
+
+        // 阶段8: 打包
+        stage('Package') {
+            steps {
+                container('maven') {
+                    script {
+                        echo "📦 打包服务..."
+                        
+                        sh """
+                            mvn clean package \
+                                -P${BUILD_PROFILE} \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -DskipTests=${params.SKIP_TESTS} \
+                                -B -q
+                        """
+                        
+                        // 创建部署目录
+                        sh """
+                            mkdir -p deploy
+                            cp edams-gateway/target/*.jar deploy/edams-gateway.jar || true
+                            cp edams-auth/target/*.jar deploy/edams-auth.jar || true
+                            cp edams-asset/target/*.jar deploy/edams-asset.jar || true
+                            cp edams-lineage/target/*.jar deploy/edams-lineage.jar || true
+                            cp edams-quality/target/*.jar deploy/edams-quality.jar || true
+                        """
+                        
+                        echo "✅ 打包完成"
+                    }
+                }
+                
+                // 归档部署包
+                post {
+                    success {
+                        archiveArtifacts artifacts: 'deploy/*.jar', allowEmptyArchive: false
+                        archiveArtifacts artifacts: 'target/*.jar', allowEmptyArchive: false
+                    }
+                }
+            }
+        }
+
+        // 阶段9: Docker镜像构建
+        stage('Docker Build') {
+            steps {
+                container('docker') {
+                    script {
+                        echo "🐳 构建Docker镜像..."
+                        
+                        // 登录Docker Registry
+                        withCredentials([usernamePassword(
+                            credentialsId: 'docker-registry',
+                            usernameVariable: 'DOCKER_USERNAME',
+                            passwordVariable: 'DOCKER_PASSWORD'
+                        )]) {
+                            sh """
+                                echo ${DOCKER_PASSWORD} | docker login ${DOCKER_REGISTRY_URL} \
+                                    --username ${DOCKER_USERNAME} \
+                                    --password-stdin
+                            """
+                        }
+                        
+                        // 构建网关服务
+                        sh """
+                            docker build \
+                                -f infrastructure/docker/optimized/Dockerfile \
+                                --target service \
+                                --build-arg BUILD_PROFILE=${BUILD_PROFILE} \
+                                --build-arg SERVICE_NAME=gateway \
+                                --build-arg SKIP_TESTS=${params.SKIP_TESTS} \
+                                -t ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG} \
+                                -t ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_LATEST_TAG} \
+                                --no-cache \
+                                .
+                        """
+                        
+                        // 构建认证服务
+                        sh """
+                            docker build \
+                                -f infrastructure/docker/optimized/Dockerfile \
+                                --target service \
+                                --build-arg BUILD_PROFILE=${BUILD_PROFILE} \
+                                --build-arg SERVICE_NAME=auth \
+                                --build-arg SKIP_TESTS=${params.SKIP_TESTS} \
+                                -t ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_TAG} \
+                                -t ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_LATEST_TAG} \
+                                --no-cache \
+                                .
+                        """
+                        
+                        echo "✅ Docker镜像构建完成"
+                    }
+                }
+                
+                // 容器安全扫描
+                post {
+                    success {
+                        container('trivy') {
+                            script {
+                                echo "🔍 容器安全扫描..."
+                                
+                                sh """
+                                    trivy image \
+                                        --format template \
+                                        --template "@contrib/gitlab.tpl" \
+                                        --output container-scan-report.json \
+                                        --severity HIGH,CRITICAL \
+                                        --exit-code 0 \
+                                        ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG}
+                                """
+                                
+                                echo "✅ 容器安全扫描完成"
+                                
+                                // 归档安全报告
+                                archiveArtifacts artifacts: 'container-scan-report.json', allowEmptyArchive: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阶段10: 镜像推送
+        stage('Docker Push') {
+            steps {
+                container('docker') {
+                    script {
+                        echo "🚀 推送Docker镜像..."
+                        
+                        // 推送网关服务
+                        sh """
+                            docker push ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG}
+                            docker push ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_LATEST_TAG}
+                        """
+                        
+                        // 推送认证服务
+                        sh """
+                            docker push ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_TAG}
+                            docker push ${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_LATEST_TAG}
+                        """
+                        
+                        echo "✅ Docker镜像推送完成"
+                    }
+                }
+            }
+        }
+
+        // 阶段11: 部署到开发环境
+        stage('Deploy to Dev') {
+            when {
+                expression { params.DEPLOY_ENVIRONMENT == 'dev' }
+            }
+            steps {
+                container('kubectl') {
+                    script {
+                        echo "🚀 部署到开发环境..."
+                        
+                        withCredentials([file(
+                            credentialsId: 'k8s-config',
+                            variable: 'KUBECONFIG'
+                        )]) {
+                            // 设置Kubernetes上下文
+                            sh """
+                                kubectl config use-context ${K8S_CONTEXT}
+                            """
+                            
+                            // 更新部署配置
+                            sh """
+                                kubectl set image deployment/edams-gateway \
+                                    edams-gateway=${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG} \
+                                    -n ${K8S_NAMESPACE_DEV}
+                                
+                                kubectl set image deployment/edams-auth \
+                                    edams-auth=${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_TAG} \
+                                    -n ${K8S_NAMESPACE_DEV}
+                            """
+                            
+                            // 等待部署完成
+                            sh """
+                                kubectl rollout status deployment/edams-gateway \
+                                    -n ${K8S_NAMESPACE_DEV} \
+                                    --timeout=300s
+                                
+                                kubectl rollout status deployment/edams-auth \
+                                    -n ${K8S_NAMESPACE_DEV} \
+                                    --timeout=300s
+                            """
+                            
+                            echo "✅ 开发环境部署完成"
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阶段12: 部署到测试环境
+        stage('Deploy to Staging') {
+            when {
+                expression { params.DEPLOY_ENVIRONMENT == 'staging' }
+            }
+            steps {
+                input {
+                    message "确认部署到测试环境？"
+                    ok "确认部署"
+                    parameters {
+                        booleanParam(
+                            name: 'CONFIRM_DEPLOY',
+                            defaultValue: false,
+                            description: '确认部署到测试环境'
+                        )
+                    }
+                }
+                
+                container('kubectl') {
+                    script {
+                        echo "🚀 部署到测试环境..."
+                        
+                        withCredentials([file(
+                            credentialsId: 'k8s-config',
+                            variable: 'KUBECONFIG'
+                        )]) {
+                            // 设置Kubernetes上下文
+                            sh """
+                                kubectl config use-context ${K8S_CONTEXT}
+                            """
+                            
+                            // 备份当前部署 (用于回滚)
+                            sh """
+                                kubectl get deployment edams-gateway \
+                                    -n ${K8S_NAMESPACE_STAGING} \
+                                    -o yaml > edams-gateway-backup.yaml
+                                
+                                kubectl get deployment edams-auth \
+                                    -n ${K8S_NAMESPACE_STAGING} \
+                                    -o yaml > edams-auth-backup.yaml
+                            """
+                            
+                            // 更新部署配置
+                            sh """
+                                kubectl set image deployment/edams-gateway \
+                                    edams-gateway=${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG} \
+                                    -n ${K8S_NAMESPACE_STAGING}
+                                
+                                kubectl set image deployment/edams-auth \
+                                    edams-auth=${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-auth:${DOCKER_TAG} \
+                                    -n ${K8S_NAMESPACE_STAGING}
+                            """
+                            
+                            // 等待部署完成
+                            sh """
+                                kubectl rollout status deployment/edams-gateway \
+                                    -n ${K8S_NAMESPACE_STAGING} \
+                                    --timeout=300s
+                                
+                                kubectl rollout status deployment/edams-auth \
+                                    -n ${K8S_NAMESPACE_STAGING} \
+                                    --timeout=300s
+                            """
+                            
+                            echo "✅ 测试环境部署完成"
+                            
+                            // 归档备份文件
+                            archiveArtifacts artifacts: '*-backup.yaml', allowEmptyArchive: false
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阶段13: 集成测试 (在测试环境)
+        stage('Integration Test on Staging') {
+            when {
+                expression { 
+                    params.DEPLOY_ENVIRONMENT == 'staging' && 
+                    params.RUN_PERFORMANCE_TEST == true 
+                }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        echo "🧪 在测试环境执行集成测试..."
+                        
+                        // 等待服务启动
+                        sh """
+                            sleep 60
+                        """
+                        
+                        // 执行API测试
+                        sh """
+                            mvn verify \
+                                -Pintegration-test \
+                                -Dit.test=*IntegrationTest \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -B -q
+                        """
+                        
+                        echo "✅ 集成测试完成"
+                    }
+                }
+            }
+        }
+
+        // 阶段14: 性能测试
+        stage('Performance Test') {
+            when {
+                expression { params.RUN_PERFORMANCE_TEST == true }
+            }
+            steps {
+                container('maven') {
+                    script {
+                        echo "⚡ 执行性能测试..."
+                        
+                        sh """
+                            mvn gatling:test \
+                                -Dgatling.simulationClass=com.enterprise.edams.performance.ApiLoadTest \
+                                -Denforcer.skip=true \
+                                -Dcheckstyle.skip=true \
+                                -B -q
+                        """
+                        
+                        echo "✅ 性能测试完成"
+                    }
+                }
+                
+                // 归档性能测试报告
+                post {
+                    always {
+                        archiveArtifacts artifacts: 'target/gatling/**', allowEmptyArchive: false
+                    }
+                }
+            }
+        }
+
+        // 阶段15: 部署到生产环境
+        stage('Deploy to Production') {
+            when {
+                expression { params.DEPLOY_ENVIRONMENT == 'production' }
+            }
+            steps {
+                // 生产环境部署需要额外确认
+                input {
+                    message "确认部署到生产环境？这将影响线上用户。"
+                    ok "确认部署到生产环境"
+                    parameters {
+                        booleanParam(
+                            name: 'CONFIRM_PRODUCTION_DEPLOY',
+                            defaultValue: false,
+                            description: '确认部署到生产环境'
+                        )
+                        
+                        choice(
+                            name: 'DEPLOYMENT_STRATEGY',
+                            choices: ['blue-green', 'canary', 'rolling'],
+                            description: '选择部署策略'
+                        )
+                        
+                        string(
+                            name: 'ROLLBACK_TIMEOUT',
+                            defaultValue: '300',
+                            description: '回滚超时时间 (秒)'
+                        )
+                    }
+                }
+                
+                container('kubectl') {
+                    script {
+                        echo "🚀 部署到生产环境 (策略: ${params.DEPLOYMENT_STRATEGY})..."
+                        
+                        withCredentials([file(
+                            credentialsId: 'k8s-config',
+                            variable: 'KUBECONFIG'
+                        )]) {
+                            // 设置Kubernetes上下文
+                            sh """
+                                kubectl config use-context ${K8S_CONTEXT}
+                            """
+                            
+                            // 根据策略执行部署
+                            if (params.DEPLOYMENT_STRATEGY == 'blue-green') {
+                                // 蓝绿部署
+                                sh """
+                                    # 部署新版本 (蓝色)
+                                    kubectl apply -f infrastructure/ci-cd/kubernetes/production/blue-deployment.yaml
+                                    
+                                    # 等待新版本就绪
+                                    kubectl rollout status deployment/edams-gateway-blue \
+                                        -n ${K8S_NAMESPACE_PROD} \
+                                        --timeout=300s
+                                    
+                                    # 切换流量
+                                    kubectl apply -f infrastructure/ci-cd/kubernetes/production/switch-traffic.yaml
+                                    
+                                    # 清理旧版本 (绿色)
+                                    kubectl delete deployment edams-gateway-green -n ${K8S_NAMESPACE_PROD} || true
+                                """
+                            } else if (params.DEPLOYMENT_STRATEGY == 'canary') {
+                                // 金丝雀发布
+                                sh """
+                                    # 部署金丝雀版本 (10%流量)
+                                    kubectl apply -f infrastructure/ci-cd/kubernetes/production/canary-deployment.yaml
+                                    
+                                    # 监控金丝雀版本
+                                    sleep 60
+                                    
+                                    # 逐步增加流量
+                                    kubectl apply -f infrastructure/ci-cd/kubernetes/production/increase-traffic.yaml
+                                    
+                                    # 最终切换到新版本
+                                    kubectl apply -f infrastructure/ci-cd/kubernetes/production/full-traffic.yaml
+                                """
+                            } else {
+                                // 滚动更新 (默认)
+                                sh """
+                                    # 备份当前部署
+                                    kubectl get deployment edams-gateway \
+                                        -n ${K8S_NAMESPACE_PROD} \
+                                        -o yaml > edams-gateway-production-backup.yaml
+                                    
+                                    # 更新部署
+                                    kubectl set image deployment/edams-gateway \
+                                        edams-gateway=${DOCKER_REGISTRY_URL}/${DOCKER_NAMESPACE}/edams-gateway:${DOCKER_TAG} \
+                                        -n ${K8S_NAMESPACE_PROD}
+                                    
+                                    # 等待部署完成
+                                    kubectl rollout status deployment/edams-gateway \
+                                        -n ${K8S_NAMESPACE_PROD} \
+                                        --timeout=${params.ROLLBACK_TIMEOUT}s
+                                """
+                            }
+                            
+                            echo "✅ 生产环境部署完成"
+                            
+                            // 归档备份文件
+                            archiveArtifacts artifacts: '*-production-backup.yaml', allowEmptyArchive: false
+                        }
+                    }
+                }
+            }
+        }
+
+        // 阶段16: 健康检查
+        stage('Health Check') {
+            steps {
+                script {
+                    echo "🩺 执行健康检查..."
+                    
+                    // 根据环境确定URL
+                    def healthCheckUrl = ""
+                    if (params.DEPLOY_ENVIRONMENT == 'dev') {
+                        healthCheckUrl = "http://dev.edams.com/actuator/health"
+                    } else if (params.DEPLOY_ENVIRONMENT == 'staging') {
+                        healthCheckUrl = "http://staging.edams.com/actuator/health"
+                    } else if (params.DEPLOY_ENVIRONMENT == 'production') {
+                        healthCheckUrl = "http://api.edams.com/actuator/health"
+                    }
+                    
+                    if (healthCheckUrl) {
+                        container('curl') {
+                            sh """
+                                # 等待服务启动
+                                timeout 300 sh -c '
+                                    while ! curl -f ${healthCheckUrl} > /dev/null 2>&1; do
+                                        echo "等待服务启动..."
+                                        sleep 10
+                                    done
+                                '
+                                
+                                # 执行健康检查
+                                curl -f ${healthCheckUrl} | jq .
+                            """
+                        }
+                    }
+                    
+                    echo "✅ 健康检查通过"
+                }
+            }
+        }
+
+        // 阶段17: 通知
+        stage('Notification') {
+            steps {
+                script {
+                    echo "📢 发送通知..."
+                    
+                    // 构建状态
+                    def buildStatus = currentBuild.currentResult
+                    def buildUrl = env.BUILD_URL
+                    def buildNumber = env.BUILD_NUMBER
+                    def gitBranch = env.GIT_BRANCH
+                    def gitCommit = env.GIT_COMMIT.take(8)
+                    
+                    // Slack通知
+                    withCredentials([string(
+                        credentialsId: 'slack-webhook',
+                        variable: 'SLACK_WEBHOOK_URL'
+                    )]) {
+                        def message = ""
+                        if (buildStatus == 'SUCCESS') {
+                            message = "✅ *构建成功*\n" +
+                                     "项目: ${PROJECT_NAME}\n" +
+                                     "环境: ${params.DEPLOY_ENVIRONMENT}\n" +
+                                     "分支: ${gitBranch}\n" +
+                                     "提交: ${gitCommit}\n" +
+                                     "构建: #${buildNumber}\n" +
+                                     "镜像标签: ${DOCKER_TAG}\n" +
+                                     "流水线: ${buildUrl}"
+                        } else {
+                            message = "❌ *构建失败*\n" +
+                                     "项目: ${PROJECT_NAME}\n" +
+                                     "环境: ${params.DEPLOY_ENVIRONMENT}\n" +
+                                     "分支: ${gitBranch}\n" +
+                                     "提交: ${gitCommit}\n" +
+                                     "构建: #${buildNumber}\n" +
+                                     "失败阶段: ${currentBuild.stageName}\n" +
+                                     "流水线: ${buildUrl}"
+                        }
+                        
+                        sh """
+                            curl -X POST ${SLACK_WEBHOOK_URL} \
+                                -H 'Content-type: application/json' \
+                                --data '{"text":"${message}"}'
+                        """
+                    }
+                    
+                    echo "✅ 通知发送完成"
+                }
+            }
+        }
+    }
+
+    // 后处理
+    post {
+        // 总是执行
+        always {
+            script {
+                echo "🧹 清理工作空间..."
+                
+                // 清理Docker缓存
+                container('docker') {
+                    sh """
+                        docker system prune -f || true
+                    """
+                }
+                
+                // 保存构建信息
+                writeFile file: 'build-info.json', text: """
+{
+    "project": "${PROJECT_NAME}",
+    "version": "${PROJECT_VERSION}",
+    "buildNumber": ${BUILD_NUMBER},
+    "environment": "${params.DEPLOY_ENVIRONMENT}",
+    "gitBranch": "${GIT_BRANCH}",
+    "gitCommit": "${GIT_COMMIT}",
+    "imageTag": "${DOCKER_TAG}",
+    "buildTime": "${new Date().format('yyyy-MM-dd HH:mm:ss')}",
+    "status": "${currentBuild.currentResult}"
+}
+                """
+                
+                // 归档构建信息
+                archiveArtifacts artifacts: 'build-info.json', allowEmptyArchive: false
+            }
+        }
+        
+        // 构建成功
+        success {
+            script {
+                echo "🎉 流水线执行成功!"
+                
+                // 更新部署状态
+                currentBuild.description = "${params.DEPLOY_ENVIRONMENT.toUpperCase()} - ${DOCKER_TAG}"
+                
+                // 生成部署报告
+                sh """
+                    echo "部署报告" > deploy-report.md
+                    echo "=========" >> deploy-report.md
+                    echo "" >> deploy-report.md
+                    echo "- 环境: ${params.DEPLOY_ENVIRONMENT}" >> deploy-report.md
+                    echo "- 版本: ${PROJECT_VERSION}" >> deploy-report.md
+                    echo "- 镜像标签: ${DOCKER_TAG}" >> deploy-report.md
+                    echo "- 构建编号: ${BUILD_NUMBER}" >> deploy-report.md
+                    echo "- 部署时间: ${new Date().format('yyyy-MM-dd HH:mm:ss')}" >> deploy-report.md
+                    echo "" >> deploy-report.md
+                    echo "部署的服务:" >> deploy-report.md
+                    echo "- edams-gateway:${DOCKER_TAG}" >> deploy-report.md
+                    echo "- edams-auth:${DOCKER_TAG}" >> deploy-report.md
+                """
+                
+                archiveArtifacts artifacts: 'deploy-report.md', allowEmptyArchive: false
+            }
+        }
+        
+        // 构建失败
+        failure {
+            script {
+                echo "💥 流水线执行失败!"
+                currentBuild.description = "FAILED - ${currentBuild.stageName}"
+                
+                // 发送告警
+                emailext(
+                    subject: "🚨 EDAMS流水线失败: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                    body: """
+项目: ${PROJECT_NAME}
+环境: ${params.DEPLOY_ENVIRONMENT}
+分支: ${env.GIT_BRANCH}
+构建: #${env.BUILD_NUMBER}
+失败阶段: ${currentBuild.stageName}
+流水线: ${env.BUILD_URL}
+
+请检查日志: ${env.BUILD_URL}console
+                    """,
+                    to: 'devops-team@enterprise.com,developers@enterprise.com',
+                    attachLog: true,
+                    compressLog: true
+                )
+            }
+        }
+        
+        // 构建不稳定
+        unstable {
+            script {
+                echo "⚠️ 流水线执行不稳定"
+                currentBuild.description = "UNSTABLE - ${currentBuild.stageName}"
+            }
+        }
+    }
+}
