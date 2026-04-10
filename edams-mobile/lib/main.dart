@@ -7,6 +7,7 @@ import 'config/app_config.dart';
 import 'config/theme.dart';
 import 'stores/app_store.dart';
 import 'stores/locale_store.dart';
+import 'stores/theme_store.dart';
 import 'pages/splash_page.dart';
 
 void main() async {
@@ -35,15 +36,16 @@ class EDAMSApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => LocaleStore()),
         ChangeNotifierProvider(create: (_) => AppStore()),
+        ChangeNotifierProvider(create: (_) => ThemeStore()),
       ],
-      child: Consumer<LocaleStore>(
-        builder: (context, localeStore, _) {
+      child: Consumer2<LocaleStore, ThemeStore>(
+        builder: (context, localeStore, themeStore, _) {
           return MaterialApp(
             title: '企业数据资产管理',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.system,
+            themeMode: themeStore.themeMode,
             locale: localeStore.locale,
             supportedLocales: const [
               Locale('zh', 'CN'),

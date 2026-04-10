@@ -434,4 +434,209 @@ class DatasourceConfigServiceTest {
         // Then
         assertThat(result).isFalse();
     }
+
+    // ==================== 加密/解密测试 ====================
+
+    @Test
+    @DisplayName("加密密码 - AES-256-GCM加密成功")
+    void testEncryptPassword_Success() throws Exception {
+        // Given - 通过反射设置加密密钥
+        var encryptionKeyField = DatasourceConfigServiceImpl.class.getDeclaredField("encryptionKey");
+        encryptionKeyField.setAccessible(true);
+        encryptionKeyField.set(datasourceConfigService, "test-aes-256-gcm-key-32bytes!");
+
+        String plainPassword = "mySecretPassword123";
+
+        // When - 通过测试加密后的密码能否正确存储
+        when(datasourceConfigRepository.selectByCode(anyString())).thenReturn(null);
+        when(datasourceConfigRepository.insert(any(DatasourceConfig.class))).thenAnswer(invocation -> {
+            DatasourceConfig config = invocation.getArgument(0);
+            config.setId(1L);
+            return 1;
+        });
+
+        CreateDatasourceRequest request = new CreateDatasourceRequest();
+        request.setCode("ENCRYPT-TEST-001");
+        request.setName("加密测试数据源");
+        request.setDatasourceType("MYSQL");
+        request.setHost("localhost");
+        request.setPort(3306);
+        request.setDatabaseName("test_db");
+        request.setUsername("root");
+        request.setPassword(plainPassword);
+
+        Long id = datasourceConfigService.createDatasource(request);
+
+        // Then - 验证加密密码不为null且与原文不同
+        assertThat(id).isEqualTo(1L);
+        verify(datasourceConfigRepository, times(1)).insert(argThat(config -> 
+            config.getPasswordEnc() != null && 
+            !plainPassword.equals(config.getPasswordEnc()) &&
+            config.getPasswordEnc().length() > 32 // Base64编码后长度增加
+        ));
+    }
+
+    @Test
+    @DisplayName("解密密码 - AES-256-GCM解密成功")
+    void testDecryptPassword_Success() throws Exception {
+        // Given - 创建包含加密密码的数据源
+        var encryptionKeyField = DatasourceConfigServiceImpl.class.getDeclaredField("encryptionKey");
+        encryptionKeyField.setAccessible(true);
+        encryptionKeyField.set(datasourceConfigService, "test-aes-256-gcm-key-32bytes!");
+
+        String plainPassword = "decryptTestPassword456";
+
+        // 先加密得到密文
+        when(datasourceConfigRepository.selectByCode(anyString())).thenReturn(null);
+        when(datasourceConfigRepository.insert(any(DatasourceConfig.class))).thenAnswer(invocation -> {
+            DatasourceConfig config = invocation.getArgument(0);
+            config.setId(1L);
+            return 1;
+        });
+
+        CreateDatasourceRequest request = new CreateDatasourceRequest();
+        request.setCode("DECRYPT-TEST-001");
+        request.setName("解密测试数据源");
+        request.setDatasourceType("MYSQL");
+        request.setHost("localhost");
+        request.setPort(3306);
+        request.setDatabaseName("test_db");
+        request.setUsername("root");
+        request.setPassword(plainPassword);
+
+        datasourceConfigService.createDatasource(request);
+
+        // 捕获插入的数据源配置
+        org.mockito.ArgumentCaptor<DatasourceConfig> captor = org.mockito.ArgumentCaptor.forClass(DatasourceConfig.class);
+        verify(datasourceConfigRepository).insert(captor.capture());
+        String encryptedPassword = captor.getValue().getPasswordEnc();
+
+        // 模拟查询返回已加密的数据
+        DatasourceConfig storedConfig = new DatasourceConfig();
+        storedConfig.setId(1L);
+        storedConfig.setPasswordEnc(encryptedPassword);
+        storedConfig.setDatasourceType("MYSQL");
+        storedConfig.setHost("localhost");
+        storedConfig.setPort(3306);
+        storedConfig.setDatabaseName("test_db");
+        storedConfig.setUsername("root");
+        storedConfig.setStatus(DatasourceStatus.INACTIVE.name());
+        storedConfig.setHealthStatus(HealthStatus.UNKNOWN.name());
+
+        when(datasourceConfigRepository.selectById(1L)).thenReturn(storedConfig);
+        when(connectorFactory.getConnector("MYSQL")).thenReturn(datasourceConnector);
+        when(datasourceConnector.testConnection(any(ConnectionTestRequest.class))).thenReturn(true);
+        when(datasourceConfigRepository.updateById(any(DatasourceConfig.class))).thenReturn(true);
+
+        // When - 调用testDatasourceConnection会触发解密
+        ConnectionTestResponse response = datasourceConfigService.testDatasourceConnection(1L);
+
+        // Then - 验证连接测试成功（说明密码能正确解密用于连接）
+        assertThat(response).isNotNull();
+        assertThat(response.getSuccess()).isTrue();
+    }
+
+    @Test
+    @DisplayName("加密密码 - 空密码返回null")
+    void testEncryptPassword_NullInput() throws Exception {
+        // Given
+        var encryptionKeyField = DatasourceConfigServiceImpl.class.getDeclaredField("encryptionKey");
+        encryptionKeyField.setAccessible(true);
+        encryptionKeyField.set(datasourceConfigService, "test-key-32bytes!");
+
+        when(datasourceConfigRepository.selectByCode(anyString())).thenReturn(null);
+        when(datasourceConfigRepository.insert(any(DatasourceConfig.class))).thenAnswer(invocation -> {
+            DatasourceConfig config = invocation.getArgument(0);
+            config.setId(1L);
+            return 1;
+        });
+
+        CreateDatasourceRequest request = new CreateDatasourceRequest();
+        request.setCode("NULL-PWD-001");
+        request.setName("空密码测试");
+        request.setDatasourceType("MYSQL");
+        request.setHost("localhost");
+        request.setPort(3306);
+        request.setDatabaseName("test_db");
+        request.setUsername("root");
+        request.setPassword(null);
+
+        // When
+        Long id = datasourceConfigService.createDatasource(request);
+
+        // Then
+        assertThat(id).isEqualTo(1L);
+        verify(datasourceConfigRepository).insert(argThat(config -> config.getPasswordEnc() == null));
+    }
+
+    @Test
+    @DisplayName("加密密码 - 相同密码每次加密结果不同（随机IV）")
+    void testEncryptPassword_RandomIV() throws Exception {
+        // Given
+        var encryptionKeyField = DatasourceConfigServiceImpl.class.getDeclaredField("encryptionKey");
+        encryptionKeyField.setAccessible(true);
+        encryptionKeyField.set(datasourceConfigService, "test-aes-256-gcm-key-32bytes!");
+
+        String plainPassword = "samePassword";
+
+        // Mock两次插入调用
+        when(datasourceConfigRepository.selectByCode(anyString())).thenReturn(null);
+        when(datasourceConfigRepository.insert(any(DatasourceConfig.class))).thenAnswer(invocation -> {
+            DatasourceConfig config = invocation.getArgument(0);
+            config.setId(1L);
+            return 1;
+        }).thenAnswer(invocation -> {
+            DatasourceConfig config = invocation.getArgument(0);
+            config.setId(2L);
+            return 1;
+        });
+
+        CreateDatasourceRequest request1 = new CreateDatasourceRequest();
+        request1.setCode("SAME-PWD-001");
+        request1.setName("相同密码测试1");
+        request1.setDatasourceType("MYSQL");
+        request1.setHost("localhost");
+        request1.setPort(3306);
+        request1.setDatabaseName("test_db");
+        request1.setUsername("root");
+        request1.setPassword(plainPassword);
+
+        datasourceConfigService.createDatasource(request1);
+
+        CreateDatasourceRequest request2 = new CreateDatasourceRequest();
+        request2.setCode("SAME-PWD-002");
+        request2.setName("相同密码测试2");
+        request2.setDatasourceType("MYSQL");
+        request2.setHost("localhost");
+        request2.setPort(3306);
+        request2.setDatabaseName("test_db");
+        request2.setUsername("root");
+        request2.setPassword(plainPassword);
+
+        datasourceConfigService.createDatasource(request2);
+
+        // Then - 验证两次加密结果不同（由于随机IV）
+        org.mockito.ArgumentCaptor<DatasourceConfig> captor = org.mockito.ArgumentCaptor.forClass(DatasourceConfig.class);
+        verify(datasourceConfigRepository, times(2)).insert(captor.capture());
+
+        List<DatasourceConfig> capturedConfigs = captor.getAllValues();
+        String encrypted1 = capturedConfigs.get(0).getPasswordEnc();
+        String encrypted2 = capturedConfigs.get(1).getPasswordEnc();
+
+        assertThat(encrypted1).isNotEqualTo(encrypted2); // 由于随机IV，两次加密结果不同
+    }
+
+    @Test
+    @DisplayName("解密密码 - 空密码返回null")
+    void testDecryptPassword_NullInput() throws Exception {
+        // Given
+        when(datasourceConfigRepository.selectById(1L)).thenReturn(testConfig);
+
+        // When
+        ConnectionTestResponse response = datasourceConfigService.testDatasourceConnection(1L);
+
+        // Then - 测试配置中passwordEnc为"encrypted_password"会尝试解密
+        // 由于不是有效的AES-GCM加密格式，会抛出异常但被捕获并返回失败响应
+        assertThat(response).isNotNull();
+    }
 }

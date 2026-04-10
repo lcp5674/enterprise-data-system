@@ -8,6 +8,7 @@ import com.enterprise.edams.common.exception.BusinessException;
 import com.enterprise.edams.common.result.ResultCode;
 import com.enterprise.edams.user.dto.*;
 import com.enterprise.edams.user.entity.SysDepartment;
+import com.enterprise.edams.user.feign.PermissionFeignClient;
 import com.enterprise.edams.user.repository.SysDepartmentRepository;
 import com.enterprise.edams.user.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class UserServiceImpl implements UserService {
     private final SysUserRepository userRepository;
     private final SysDepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PermissionFeignClient permissionFeignClient;
 
     @Override
     @Transactional
@@ -287,24 +289,68 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void assignRoles(String userId, List<String> roleIds) {
         log.info("分配角色: userId={}, roleIds={}", userId, roleIds);
-        // TODO: 调用权限服务实现角色分配
+
+        // 验证用户是否存在
+        SysUser user = userRepository.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND, "用户不存在");
+        }
+
+        try {
+            // 调用权限服务分配角色
+            var result = permissionFeignClient.assignRoles(userId, roleIds);
+            if (result == null || result.getCode() != 200) {
+                throw new BusinessException("角色分配失败: " + (result != null ? result.getMessage() : "服务异常"));
+            }
+            log.info("角色分配成功: userId={}, roleIds={}", userId, roleIds);
+        } catch (Exception e) {
+            log.error("调用权限服务分配角色失败: userId={}, error={}", userId, e.getMessage());
+            throw new BusinessException("角色分配失败: " + e.getMessage());
+        }
     }
 
     @Override
     public List<String> getUserRoles(String userId) {
-        // TODO: 从权限服务获取用户角色
+        try {
+            var result = permissionFeignClient.getUserRoles(userId);
+            if (result != null && result.getData() != null) {
+                return result.getData().stream()
+                        .map(role -> (String) role.get("roleCode"))
+                        .filter(code -> code != null)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("从权限服务获取用户角色失败, userId: {}, error: {}", userId, e.getMessage());
+        }
         return Collections.emptyList();
     }
 
     @Override
     public List<String> getUserMenus(String userId) {
-        // TODO: 从权限服务获取用户菜单
+        try {
+            var result = permissionFeignClient.getUserMenus(userId);
+            if (result != null && result.getData() != null) {
+                return result.getData().stream()
+                        .map(menu -> (String) menu.get("path"))
+                        .filter(path -> path != null)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("从权限服务获取用户菜单失败, userId: {}, error: {}", userId, e.getMessage());
+        }
         return Collections.emptyList();
     }
 
     @Override
     public List<String> getUserPermissions(String userId) {
-        // TODO: 从权限服务获取用户权限
+        try {
+            var result = permissionFeignClient.getUserPermissions(userId);
+            if (result != null && result.getData() != null) {
+                return result.getData();
+            }
+        } catch (Exception e) {
+            log.warn("从权限服务获取用户权限失败, userId: {}, error: {}", userId, e.getMessage());
+        }
         return Collections.emptyList();
     }
 

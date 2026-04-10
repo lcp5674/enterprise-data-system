@@ -19,6 +19,7 @@ import {
   message,
   Dropdown,
   Tooltip,
+  Modal,
 } from 'antd';
 import type { MenuProps } from 'antd';
 import type { TabsProps } from 'antd';
@@ -57,6 +58,7 @@ const AssetDetail: React.FC = () => {
   const [fields, setFields] = useState<DataField[]>([]);
   const [lineage, setLineage] = useState<LineageGraph | null>(null);
   const [activeTab, setActiveTab] = useState('info');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const isEditMode = searchParams.get('mode') === 'edit';
   const assetId = params.id as string;
@@ -124,8 +126,28 @@ const AssetDetail: React.FC = () => {
 
   // 删除资产
   const handleDelete = () => {
-    // TODO: 实现删除逻辑
-    message.info('删除功能开发中');
+    if (!asset) return;
+
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除资产「${asset.name}」吗？此操作不可恢复。`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        setDeleteLoading(true);
+        try {
+          await assetService.deleteAsset(assetId, { deleteType: 'SOFT' });
+          message.success('资产删除成功');
+          navigate('/assets/list');
+        } catch (error) {
+          console.error('删除资产失败:', error);
+          message.error('删除失败，请重试');
+        } finally {
+          setDeleteLoading(false);
+        }
+      },
+    });
   };
 
   // 导出资产
@@ -157,9 +179,10 @@ const AssetDetail: React.FC = () => {
       { type: 'divider' },
       {
         key: 'delete',
-        icon: <DeleteOutlined />,
+        icon: deleteLoading ? <Spin size="small" /> : <DeleteOutlined />,
         label: '删除',
         danger: true,
+        disabled: deleteLoading,
         onClick: handleDelete,
       },
     ],

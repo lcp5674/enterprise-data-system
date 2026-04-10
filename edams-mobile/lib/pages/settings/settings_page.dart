@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../stores/locale_store.dart';
 import '../../stores/app_store.dart';
+import '../../stores/theme_store.dart';
 import '../../services/auth_service.dart';
 import '../login_page.dart';
 
@@ -38,11 +39,13 @@ class SettingsPage extends StatelessWidget {
                   context,
                   icon: Icons.dark_mode,
                   title: '深色模式',
-                  trailing: Switch(
-                    value: Theme.of(context).brightness == Brightness.dark,
-                    onChanged: (value) {
-                      // TODO: Implement theme switching
-                    },
+                  trailing: Consumer<ThemeStore>(
+                    builder: (context, themeStore, _) => Switch(
+                      value: themeStore.isDark,
+                      onChanged: (value) {
+                        themeStore.setTheme(value ? ThemeMode.dark : ThemeMode.light);
+                      },
+                    ),
                   ),
                 ),
                 _buildSettingsItem(

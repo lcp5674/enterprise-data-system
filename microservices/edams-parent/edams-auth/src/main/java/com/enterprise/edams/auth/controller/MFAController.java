@@ -3,7 +3,10 @@ package com.enterprise.edams.auth.controller;
 import com.enterprise.edams.auth.dto.MFASetupResponse;
 import com.enterprise.edams.auth.service.AuthService;
 import com.enterprise.edams.auth.service.MFAService;
+import com.enterprise.edams.common.exception.BusinessException;
 import com.enterprise.edams.common.result.Result;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -29,12 +33,14 @@ public class MFAController {
     private final AuthService authService;
     private final MFAService mfaService;
 
+    @Value("${jwt.secret}")
+    private String jwtSecretKey;
+
     @GetMapping("/setup")
     @Operation(summary = "获取MFA设置信息", description = "获取MFA设置信息（用户需先完成初始设置）")
     public Result<MFASetupResponse> getMFASetup(
             @Parameter(description = "访问令牌") @RequestHeader("Authorization") String authorization) {
 
-        // TODO: 从Token中获取用户ID
         String userId = extractUserId(authorization);
         String secret = mfaService.generateSecret();
         String qrCodeUrl = mfaService.generateQrCodeUrl(secret, userId);
@@ -101,8 +107,36 @@ public class MFAController {
     }
 
     private String extractUserId(String authorization) {
-        // TODO: 从Token中解析用户ID
-        return "user-123";
+        if (authorization == null || authorization.isEmpty()) {
+            throw new BusinessException("Authorization header不能为空");
+        }
+
+        // 移除Bearer前缀
+        String token = authorization;
+        if (authorization.startsWith("Bearer ")) {
+            token = authorization.substring(7);
+        }
+
+        try {
+            // 解析JWT Token获取用户ID
+            Claims claims = Jwts.parser()
+                    .verifyWith(jwtSecretKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+
+            String userId = claims.getSubject();
+            if (userId == null || userId.isEmpty()) {
+                throw new BusinessException("Token中未包含用户ID");
+            }
+            return userId;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("Token已过期");
+            throw new BusinessException("Token已过期，请重新登录");
+        } catch (io.jsonwebtoken.JwtException e) {
+            log.warn("Token解析失败: {}", e.getMessage());
+            throw new BusinessException("无效的Token");
+        }
     }
 
     // DTO内部类

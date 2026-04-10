@@ -21,11 +21,20 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +51,22 @@ public class DatasourceConfigServiceImpl implements DatasourceConfigService {
     private final DatasourceConfigRepository datasourceConfigRepository;
     private final DatasourceConnectorFactory connectorFactory;
     private final ObjectMapper objectMapper;
+
+    /**
+     * AES-256-GCM加密密钥（实际应从配置中心或KMS获取）
+     */
+    @Value("${datasource.encryption.key:default-aes-256-gcm-key-32bytes!}")
+    private String encryptionKey;
+
+    /**
+     * AES-256-GCM IV长度（12字节）
+     */
+    private static final int GCM_IV_LENGTH = 12;
+
+    /**
+     * AES-256-GCM TAG长度（128位）
+     */
+    private static final int GCM_TAG_LENGTH = 128;
 
     @Override
     @Transactional
@@ -323,25 +348,106 @@ public class DatasourceConfigServiceImpl implements DatasourceConfigService {
     }
 
     /**
-     * 加密密码
+     * 加密密码 - 使用AES-256-GCM算法
+     * AES-256-GCM提供加密和认证双重保护，比普通AES更安全
+     *
+     * @param password 明文密码
+     * @return Base64编码的加密密码（包含IV）
      */
     private String encryptPassword(String password) {
         if (password == null) {
             return null;
         }
-        // TODO: 实现实际的加密逻辑，如使用AES或SM4
-        return password; // 临时实现
+        try {
+            // 生成随机IV
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            SecureRandom secureRandom = new SecureRandom();
+            secureRandom.nextBytes(iv);
+
+            // 创建GCM参数规格
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+
+            // 创建AES密钥
+            SecretKeySpec keySpec = new SecretKeySpec(
+                    padKeyTo32Bytes(encryptionKey).getBytes(StandardCharsets.UTF_8), "AES");
+
+            // 初始化加密器
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, gcmSpec);
+
+            // 执行加密
+            byte[] encryptedBytes = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
+
+            // 合并IV和加密数据
+            ByteBuffer byteBuffer = ByteBuffer.allocate(iv.length + encryptedBytes.length);
+            byteBuffer.put(iv);
+            byteBuffer.put(encryptedBytes);
+
+            // 返回Base64编码
+            String encrypted = Base64.getEncoder().encodeToString(byteBuffer.array());
+            log.debug("密码加密成功，使用AES-256-GCM");
+            return encrypted;
+        } catch (Exception e) {
+            log.error("密码加密失败", e);
+            throw new DatasourceException("密码加密失败: " + e.getMessage(), e);
+        }
     }
 
     /**
-     * 解密密码
+     * 解密密码 - 使用AES-256-GCM算法
+     *
+     * @param encryptedPassword Base64编码的加密密码（包含IV）
+     * @return 解密后的明文密码
      */
     private String decryptPassword(String encryptedPassword) {
         if (encryptedPassword == null) {
             return null;
         }
-        // TODO: 实现实际的解密逻辑
-        return encryptedPassword; // 临时实现
+        try {
+            // Base64解码
+            byte[] decoded = Base64.getDecoder().decode(encryptedPassword);
+
+            // 分离IV和加密数据
+            ByteBuffer byteBuffer = ByteBuffer.wrap(decoded);
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            byteBuffer.get(iv);
+            byte[] encryptedBytes = new byte[byteBuffer.remaining()];
+            byteBuffer.get(encryptedBytes);
+
+            // 创建GCM参数规格
+            GCMParameterSpec gcmSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+
+            // 创建AES密钥
+            SecretKeySpec keySpec = new SecretKeySpec(
+                    padKeyTo32Bytes(encryptionKey).getBytes(StandardCharsets.UTF_8), "AES");
+
+            // 初始化解密器
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
+
+            // 执行解密
+            byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
+            String decrypted = new String(decryptedBytes, StandardCharsets.UTF_8);
+
+            log.debug("密码解密成功");
+            return decrypted;
+        } catch (Exception e) {
+            log.error("密码解密失败", e);
+            throw new DatasourceException("密码解密失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 将密钥填充或截断到32字节（256位）
+     */
+    private String padKeyTo32Bytes(String key) {
+        if (key == null) {
+            throw new DatasourceException("加密密钥不能为空");
+        }
+        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+        byte[] paddedKey = new byte[32];
+        System.arraycopy(keyBytes, 0, paddedKey, 0, Math.min(keyBytes.length, 32));
+        return new String(paddedKey, StandardCharsets.UTF_8);
     }
 
     /**

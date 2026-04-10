@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../stores/app_store.dart';
 import '../config/theme.dart';
 import 'main_page.dart';
+import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -177,7 +178,9 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     TextButton(
                       onPressed: () {
-                        // TODO: Navigate to register page
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const RegisterPage()),
+                        );
                       },
                       child: const Text('立即注册'),
                     ),

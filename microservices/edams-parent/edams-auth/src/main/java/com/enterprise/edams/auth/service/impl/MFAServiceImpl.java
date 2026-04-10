@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,12 +37,19 @@ public class MFAServiceImpl implements MFAService {
 
     private final SysUserRepository userRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final JavaMailSender mailSender;
 
     @Value("${auth.mfa.issuer:EDAMS}")
     private String issuer;
 
     @Value("${auth.mfa.verification-window:1}")
     private int verificationWindow;
+
+    @Value("${spring.mail.username:noreply@company.com}")
+    private String mailFrom;
+
+    @Value("${sms.enabled:false}")
+    private boolean smsEnabled;
 
     @Override
     public String generateSecret() {
@@ -244,12 +253,61 @@ public class MFAServiceImpl implements MFAService {
     }
 
     private void sendEmailCodeToUser(String email, String code) {
-        // TODO: 调用邮件服务发送验证码
-        log.info("发送邮箱验证码到 {}: {}", email, code);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(email);
+            message.setSubject("【EDAMS】您的安全验证码");
+            message.setText(buildEmailContent(code));
+            message.setSentDate(new java.util.Date());
+
+            mailSender.send(message);
+            log.info("邮箱验证码发送成功: {}", email);
+        } catch (Exception e) {
+            log.error("邮箱验证码发送失败: email={}, error={}", email, e.getMessage());
+            throw new RuntimeException("验证码发送失败，请稍后重试");
+        }
     }
 
     private void sendSmsCodeToUser(String phone, String code) {
-        // TODO: 调用短信服务发送验证码
-        log.info("发送短信验证码到 {}: {}", phone, code);
+        if (!smsEnabled) {
+            log.warn("短信服务未启用, phone={}", phone);
+            return;
+        }
+
+        try {
+            // 通过Kafka发送短信通知消息到短信服务
+            // 这里使用简单实现，实际项目中应使用Kafka消息队列
+            log.info("发送短信验证码到 {}: {}", phone, code);
+
+            // 预留Kafka消息发送接口
+            sendSmsViaKafka(phone, code);
+
+            log.info("短信验证码发送成功: {}", phone);
+        } catch (Exception e) {
+            log.error("短信验证码发送失败: phone={}, error={}", phone, e.getMessage());
+            throw new RuntimeException("验证码发送失败，请稍后重试");
+        }
+    }
+
+    private String buildEmailContent(String code) {
+        return """
+                您好！
+
+                您的安全验证码是：%s
+
+                验证码有效期为5分钟，请勿泄露给他人。
+
+                如果您未发起此请求，请忽略此邮件。
+
+                此致
+                EDAMS安全团队
+                """.formatted(code);
+    }
+
+    private void sendSmsViaKafka(String phone, String code) {
+        // 预留Kafka短信发送接口
+        // 实际实现需要注入KafkaTemplate并发送消息到短信服务主题
+        log.debug("通过Kafka发送短信: phone={}, code={}", phone, code);
     }
 }

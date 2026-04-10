@@ -43,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
     private final LoginSecurityService loginSecurityService;
     private final PasswordEncoder passwordEncoder;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final com.enterprise.edams.auth.feign.PermissionFeignClient permissionFeignClient;
 
     @Value("${auth.jwt.access-token-expiration:7200}")
     private long accessTokenExpiration;
@@ -460,12 +461,29 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private List<String> getUserRoles(String userId) {
-        // TODO: 从权限服务获取用户角色
+        try {
+            var result = permissionFeignClient.getUserRoles(userId);
+            if (result != null && result.getData() != null) {
+                return result.getData().stream()
+                        .map(role -> (String) role.get("roleCode"))
+                        .filter(code -> code != null)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("从权限服务获取用户角色失败, userId: {}, error: {}", userId, e.getMessage());
+        }
         return Collections.emptyList();
     }
 
     private List<String> getUserPermissions(String userId) {
-        // TODO: 从权限服务获取用户权限
+        try {
+            var result = permissionFeignClient.getUserPermissions(userId);
+            if (result != null && result.getData() != null) {
+                return result.getData();
+            }
+        } catch (Exception e) {
+            log.warn("从权限服务获取用户权限失败, userId: {}, error: {}", userId, e.getMessage());
+        }
         return Collections.emptyList();
     }
 
