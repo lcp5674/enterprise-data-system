@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.edams.datasource.repository.DatasourceConfigRepository">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.edams.datasource.entity.DatasourceConfig">
+        <id column="id" property="id"/>
+        <result column="name" property="name"/>
+        <result column="code" property="code"/>
+        <result column="datasource_type" property="datasourceType"/>
+        <result column="host" property="host"/>
+        <result column="port" property="port"/>
+        <result column="database_name" property="databaseName"/>
+        <result column="username" property="username"/>
+        <result column="password_enc" property="passwordEnc"/>
+        <result column="connection_url" property="connectionUrl"/>
+        <result column="properties" property="properties"/>
+        <result column="jdbc_params" property="jdbcParams"/>
+        <result column="http_headers" property="httpHeaders"/>
+        <result column="auth_type" property="authType"/>
+        <result column="status" property="status"/>
+        <result column="health_status" property="healthStatus"/>
+        <result column="last_test_time" property="lastTestTime"/>
+        <result column="last_test_result" property="lastTestResult"/>
+        <result column="last_sync_time" property="lastSyncTime"/>
+        <result column="sync_interval" property="syncInterval"/>
+        <result column="sync_enabled" property="syncEnabled"/>
+        <result column="catalog_name" property="catalogName"/>
+        <result column="description" property="description"/>
+        <result column="tags" property="tags"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_time" property="updatedTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <select id="selectPageList" resultMap="BaseResultMap">
+        SELECT * FROM datasource_config
+        WHERE deleted = 0
+        <if test="query.name != null and query.name != ''">
+            AND name LIKE CONCAT('%', #{query.name}, '%')
+        </if>
+        <if test="query.code != null and query.code != ''">
+            AND code = #{query.code}
+        </if>
+        <if test="query.datasourceType != null and query.datasourceType != ''">
+            AND datasource_type = #{query.datasourceType}
+        </if>
+        <if test="query.status != null and query.status != ''">
+            AND status = #{query.status}
+        </if>
+        <if test="query.healthStatus != null and query.healthStatus != ''">
+            AND health_status = #{query.healthStatus}
+        </if>
+        <if test="query.catalogName != null and query.catalogName != ''">
+            AND catalog_name = #{query.catalogName}
+        </if>
+        <if test="query.createdBy != null and query.createdBy != ''">
+            AND created_by = #{query.createdBy}
+        </if>
+        ORDER BY created_time DESC
+    </select>
+
+    <select id="selectByCode" resultMap="BaseResultMap">
+        SELECT * FROM datasource_config
+        WHERE code = #{code} AND deleted = 0
+    </select>
+
+    <select id="selectByCodes" resultMap="BaseResultMap">
+        SELECT * FROM datasource_config
+        WHERE code IN
+        <foreach collection="codes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+        AND deleted = 0
+    </select>
+
+    <select id="selectActiveDatasources" resultMap="BaseResultMap">
+        SELECT * FROM datasource_config
+        WHERE status = 'ACTIVE' AND deleted = 0
+        ORDER BY created_time DESC
+    </select>
+
+    <select id="selectDatasourcesNeedSync" resultMap="BaseResultMap">
+        SELECT * FROM datasource_config
+        WHERE sync_enabled = 1 AND status = 'ACTIVE' AND deleted = 0
+        ORDER BY last_sync_time ASC NULLS FIRST
+    </select>
+
+    <select id="countByType" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM datasource_config
+        WHERE datasource_type = #{datasourceType} AND deleted = 0
+    </select>
+
+    <select id="countByStatus" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM datasource_config
+        WHERE status = #{status} AND deleted = 0
+    </select>
+
+    <select id="countByHealthStatus" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM datasource_config
+        WHERE health_status = #{healthStatus} AND deleted = 0
+    </select>
+
+</mapper>

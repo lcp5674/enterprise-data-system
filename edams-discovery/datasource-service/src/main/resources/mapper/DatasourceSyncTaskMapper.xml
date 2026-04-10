@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.edams.datasource.repository.DatasourceSyncTaskRepository">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.edams.datasource.entity.DatasourceSyncTask">
+        <id column="id" property="id"/>
+        <result column="datasource_id" property="datasourceId"/>
+        <result column="task_name" property="taskName"/>
+        <result column="task_type" property="taskType"/>
+        <result column="sync_type" property="syncType"/>
+        <result column="status" property="status"/>
+        <result column="started_time" property="startedTime"/>
+        <result column="completed_time" property="completedTime"/>
+        <result column="duration" property="duration"/>
+        <result column="tables_total" property="tablesTotal"/>
+        <result column="tables_synced" property="tablesSynced"/>
+        <result column="records_total" property="recordsTotal"/>
+        <result column="records_synced" property="recordsSynced"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="error_detail" property="errorDetail"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_time" property="createdTime"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_time" property="updatedTime"/>
+        <result column="deleted" property="deleted"/>
+    </resultMap>
+
+    <select id="selectPageList" resultMap="BaseResultMap">
+        SELECT * FROM datasource_sync_task
+        WHERE deleted = 0
+        <if test="datasourceId != null">
+            AND datasource_id = #{datasourceId}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        <if test="startTime != null">
+            AND created_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null">
+            AND created_time &lt;= #{endTime}
+        </if>
+        ORDER BY created_time DESC
+    </select>
+
+    <select id="selectRecentByDatasourceId" resultMap="BaseResultMap">
+        SELECT * FROM datasource_sync_task
+        WHERE datasource_id = #{datasourceId} AND deleted = 0
+        ORDER BY created_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectRunningTasks" resultMap="BaseResultMap">
+        SELECT * FROM datasource_sync_task
+        WHERE status = 'RUNNING' AND deleted = 0
+        ORDER BY started_time ASC
+    </select>
+
+    <select id="selectPendingTasks" resultMap="BaseResultMap">
+        SELECT * FROM datasource_sync_task
+        WHERE status = 'PENDING' AND deleted = 0
+        ORDER BY created_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectFailedTasks" resultMap="BaseResultMap">
+        SELECT * FROM datasource_sync_task
+        WHERE status = 'FAILED' 
+        AND deleted = 0 
+        AND created_time &gt;= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        ORDER BY created_time DESC
+    </select>
+
+</mapper>
