@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: insight-service
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:edams_insight}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+
+  data:
+    mongodb:
+      host: ${MONGODB_HOST:localhost}
+      port: ${MONGODB_PORT:27017}
+      database: ${MONGODB_DB:edams_insight}
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: insight-service-group
+      auto-offset-reset: earliest
+
+server:
+  port: ${SERVER_PORT:8086}
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.insight.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+nacos:
+  server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+  namespace: ${NACOS_NAMESPACE:public}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+
+logging:
+  level:
+    root: INFO
