@@ -106,7 +106,7 @@ export default defineConfig({
           routes: [
             { path: '/assets/list', component: 'Assets/AssetList', name: '资产列表' },
             { path: '/assets/detail/:id', component: 'Assets/AssetDetail', name: '资产详情', hideInMenu: true },
-            { path: '/assets/create', component: 'Assets/AssetCreate', name: '注册资产' },
+            { path: '/assets/create', component: 'Assets/Create/index', name: '注册资产' },
             { path: '/assets/favorites', component: 'Assets/AssetFavorites', name: '我的收藏' },
           ],
         },

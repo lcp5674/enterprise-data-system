@@ -1,0 +1,81 @@
+/**
+ * 质量概览页面样式
+ */
+
+.container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.statsRow {
+  margin-bottom: 16px;
+}
+
+.scoreCard {
+  border-radius: 8px;
+  text-align: center;
+
+  :global {
+    .ant-statistic-title {
+      color: #8c8c8c;
+    }
+  }
+}
+
+.scoreProgress {
+  margin-top: 16px;
+}
+
+.statCard {
+  border-radius: 8px;
+  text-align: center;
+
+  :global {
+    .ant-statistic-title {
+      color: #8c8c8c;
+    }
+  }
+}
+
+.chartCard {
+  border-radius: 8px;
+  height: 100%;
+
+  :global {
+    .ant-card-body {
+      min-height: 300px;
+    }
+  }
+}
+
+.chartPlaceholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 250px;
+}
+
+.pieChart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+}
+
+.pieLegend {
+  margin-top: 24px;
+}
+
+.tableCard {
+  border-radius: 8px;
+  margin-top: 16px;
+}

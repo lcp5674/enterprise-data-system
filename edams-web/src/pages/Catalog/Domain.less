@@ -1,0 +1,91 @@
+/**
+ * 业务域页面样式
+ */
+
+.container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+}
+
+.statsRow {
+  margin-bottom: 16px;
+}
+
+.statCard {
+  border-radius: 8px;
+  text-align: center;
+
+  :global {
+    .ant-statistic-title {
+      color: #8c8c8c;
+    }
+
+    .ant-statistic-content {
+      font-size: 24px;
+    }
+  }
+}
+
+.domainRow {
+  margin-bottom: 16px;
+}
+
+.domainCard {
+  border-radius: 8px;
+  transition: all 0.3s;
+  cursor: pointer;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+}
+
+.domainHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.domainName {
+  margin-bottom: 8px !important;
+}
+
+.domainDesc {
+  display: block;
+  margin-bottom: 16px;
+  font-size: 13px;
+  min-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.domainStats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #8c8c8c;
+
+  :global {
+    .anticon {
+      font-size: 14px;
+    }
+  }
+}
+
+.tableCard {
+  border-radius: 8px;
+}

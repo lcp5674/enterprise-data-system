@@ -1,0 +1,138 @@
+/**
+ * MFA 页面样式
+ */
+
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  
+  :global {
+    .ant-card-body {
+      padding: 0;
+    }
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: flex-start;
+  padding: 16px 24px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.backButton {
+  color: #666;
+  
+  &:hover {
+    color: #1890ff;
+  }
+}
+
+.content {
+  padding: 40px 32px;
+  text-align: center;
+}
+
+.icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  :global {
+    .anticon {
+      font-size: 32px;
+      color: #fff;
+    }
+  }
+}
+
+.title {
+  margin-bottom: 8px !important;
+  color: #262626;
+}
+
+.description {
+  color: #8c8c8c;
+  margin-bottom: 24px;
+}
+
+.qrSection {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.qrCode {
+  width: 160px;
+  height: 160px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.hint {
+  display: block;
+  font-size: 12px;
+}
+
+.secretKey {
+  display: block;
+  font-size: 12px;
+  margin-top: 8px;
+  font-family: monospace;
+}
+
+.form {
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.codeInput {
+  letter-spacing: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  
+  :global {
+    .ant-input {
+      text-align: center;
+    }
+  }
+}
+
+.submitButton {
+  height: 44px;
+  font-size: 16px;
+  border-radius: 8px;
+}
+
+.helpSection {
+  width: 100%;
+}
+
+.resendButton {
+  padding: 0;
+  height: auto;
+  
+  &:disabled {
+    color: #bfbfbf;
+  }
+}

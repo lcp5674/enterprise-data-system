@@ -1,0 +1,32 @@
+/**
+ * 目录树页面样式
+ */
+
+.container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+}
+
+.searchCard {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.treeCard {
+  border-radius: 8px;
+  min-height: calc(100vh - 200px);
+
+  :global {
+    .ant-card-body {
+      padding: 16px;
+    }
+  }
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}

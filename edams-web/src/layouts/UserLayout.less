@@ -1,0 +1,146 @@
+/**
+ * 用户布局样式
+ */
+
+.layout {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow: hidden;
+}
+
+.backgroundShape1 {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  top: -100px;
+  right: -100px;
+  animation: float 6s ease-in-out infinite;
+}
+
+.backgroundShape2 {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  bottom: -50px;
+  left: -50px;
+  animation: float 8s ease-in-out infinite reverse;
+}
+
+.backgroundShape3 {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  background: rgba(255, 255, 255, 0.05);
+  top: 50%;
+  left: 20%;
+  animation: morph 10s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes morph {
+  0%, 100% {
+    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+  }
+  50% {
+    border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%;
+  }
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.container {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 40px;
+  backdrop-filter: blur(10px);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.logoIcon {
+  font-size: 36px;
+  color: #667eea;
+  margin-right: 12px;
+}
+
+.logoText {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a2e;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.main {
+  margin-bottom: 24px;
+}
+
+.footer {
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.footerLink {
+  color: #8c8c8c;
+  cursor: pointer;
+  transition: color 0.3s;
+  font-size: 12px;
+
+  &:hover {
+    color: #667eea;
+  }
+}
+
+.footerDivider {
+  color: #d9d9d9;
+  font-size: 12px;
+}
+
+.copyright {
+  display: block;
+  margin-top: 12px;
+  color: #8c8c8c;
+  font-size: 12px;
+}

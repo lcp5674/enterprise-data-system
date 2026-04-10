@@ -1,0 +1,88 @@
+/**
+ * 登录页面样式
+ */
+
+.container {
+  width: 100%;
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 8px !important;
+  color: #1a1a2e;
+}
+
+.subtitle {
+  display: block;
+  text-align: center;
+  color: #8c8c8c;
+  margin-bottom: 24px;
+}
+
+.tabs {
+  :global {
+    .ant-tabs-nav {
+      margin-bottom: 24px;
+    }
+
+    .ant-tabs-tab {
+      padding: 12px 0;
+      font-size: 14px;
+    }
+  }
+}
+
+.submitButton {
+  height: 44px;
+  font-size: 16px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+
+  &:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4191 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.thirdParty {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0;
+
+  button {
+    width: 44px;
+    height: 44px;
+    border: 1px solid #e8e8e8;
+    color: #8c8c8c;
+    font-size: 18px;
+
+    &:hover {
+      border-color: #667eea;
+      color: #667eea;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+  }
+}
+
+.register {
+  text-align: center;
+  color: #8c8c8c;
+
+  a {
+    margin-left: 8px;
+    color: #667eea;
+    font-weight: 500;
+
+    &:hover {
+      color: #764ba2;
+    }
+  }
+}

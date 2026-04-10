@@ -1,0 +1,61 @@
+/**
+ * 资产详情页面样式
+ */
+
+.container {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: calc(100vh - 64px);
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.titleCard {
+  margin-bottom: 16px;
+  border-radius: 8px;
+
+  :global {
+    .ant-card-body {
+      padding: 24px;
+    }
+  }
+}
+
+.metaInfo {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.contentCard {
+  border-radius: 8px;
+
+  :global {
+    .ant-card-body {
+      padding: 0 24px 24px;
+    }
+  }
+}
+
+.lineagePlaceholder,
+.historyPlaceholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  padding: 48px;
+  background: #fafafa;
+  border-radius: 8px;
+}
