@@ -1,44 +1,38 @@
+# Code files - Will be generated later
+# *.tsx
+# *.ts
+# *.jsx
+# *.js
+# *.css
+# *.sql
+
 # Dependencies
-/node_modules
-/.pnp
-.pnp.js
-.yarn/install-state.gz
+# node_modules/
 
-# Testing
-/coverage
+# Build outputs
+# dist/
+# build/
+# .next/
 
-# Next.js
-/.next/
-/out/
-
-# Production
-/build
-
-# Misc
-.DS_Store
-*.pem
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local env files
-.env*.local
+# Environment files
 .env
-
-# Vercel
-.vercel
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
+.env.local
+.env.*.local
 
 # IDE
-.idea
-.vscode
+.idea/
+.vscode/
 *.swp
 *.swo
 
-# Supabase
-.supabase
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
