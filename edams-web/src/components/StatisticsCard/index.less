@@ -1,0 +1,68 @@
+.statistics-card {
+  border-radius: 8px;
+  transition: all 0.3s;
+  
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  .statistics-card-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  
+  .statistics-card-left {
+    flex: 1;
+  }
+  
+  .statistics-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  
+  .statistics-card-title {
+    font-size: 14px;
+    color: #666;
+  }
+  
+  .statistics-card-info {
+    color: #999;
+    font-size: 12px;
+  }
+  
+  .statistics-card-value {
+    margin-bottom: 8px;
+    
+    .ant-statistic-content {
+      font-size: 28px;
+    }
+  }
+  
+  .statistics-card-change {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    
+    &.up {
+      color: #52c41a;
+    }
+    
+    &.down {
+      color: #ff4d4f;
+    }
+    
+    .change-label {
+      color: #999;
+      margin-left: 4px;
+    }
+  }
+  
+  .statistics-card-right {
+    font-size: 48px;
+    opacity: 0.8;
+  }
+}

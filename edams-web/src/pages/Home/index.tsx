@@ -1,324 +1,304 @@
 /**
  * 首页/工作台
  */
-
-import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Table, Tag, Typography, Space, Button, Progress, List, Avatar } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Row, Col, Card, Table, Tag, Space, Button, Typography, List, Avatar } from 'antd';
 import {
   DatabaseOutlined,
-  FolderOutlined,
-  CheckCircleOutlined,
-  WarningOutlined,
-  RiseOutlined,
-  ClockCircleOutlined,
-  EyeOutlined,
-  StarOutlined,
+  FileTextOutlined,
+  ApiOutlined,
+  SafetyOutlined,
   ArrowRightOutlined,
+  CalendarOutlined,
+  BellOutlined,
 } from '@ant-design/icons';
-import { history, useNavigate } from '@umijs/max';
+import { useNavigate } from '@umijs/max';
+import StatisticsCard from '@/components/StatisticsCard';
+import {
+  AssetGrowthChart,
+  AssetDistributionChart,
+  QualityTrendChart,
+  IssueTrendChart,
+} from '@/components/Charts';
 import type { ColumnsType } from 'antd/es/table';
-import * as statisticsService from '../../services/statistics';
-import * as assetService from '../../services/asset';
-import type { DataAsset } from '../../types';
+import type { DataAsset } from '@/types';
 import styles from './index.less';
 
 const { Title, Text } = Typography;
 
-// 统计数据卡片配置
-const statisticsCards = [
-  { key: 'totalAssets', title: '数据资产总量', icon: <DatabaseOutlined />, color: '#1890ff' },
-  { key: 'totalTables', title: '数据表数量', icon: <FolderOutlined />, color: '#52c41a' },
-  { key: 'qualityScore', title: '数据质量评分', icon: <CheckCircleOutlined />, color: '#faad14', suffix: '%' },
-  { key: 'qualityIssues', title: '待处理质量问题', icon: <WarningOutlined />, color: '#f5222d' },
-];
-
-const Home: React.FC = () => {
+const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [statistics, setStatistics] = useState<any>({});
-  const [recentAssets, setRecentAssets] = useState<DataAsset[]>([]);
-  const [qualityOverview, setQualityOverview] = useState<any>({});
-
-  // 获取统计数据
-  const fetchStatistics = async () => {
-    try {
-      const [assetStats, qualityStats] = await Promise.all([
-        statisticsService.getAssetStatistics(),
-        statisticsService.getQualityStatistics(),
-      ]);
-
-      setStatistics({
-        totalAssets: assetStats.totalAssets || 0,
-        totalTables: assetStats.totalTables || 0,
-        qualityScore: qualityStats.overallScore || 0,
-        qualityIssues: qualityStats.pendingIssues || 0,
-      });
-
-      setQualityOverview({
-        totalRules: qualityStats.totalRules || 0,
-        passedRules: qualityStats.passedRules || 0,
-        failedRules: qualityStats.failedRules || 0,
-        scheduledChecks: qualityStats.scheduledChecks || 0,
-      });
-    } catch (error) {
-      console.error('获取统计数据失败:', error);
-    }
-  };
-
-  // 获取最近访问的资产
-  const fetchRecentAssets = async () => {
-    try {
-      const result = await assetService.getRecentAssets({ pageSize: 5 });
-      setRecentAssets(result.items || []);
-    } catch (error) {
-      console.error('获取最近资产失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [stats, setStats] = useState({
+    totalAssets: 0,
+    totalTables: 0,
+    totalApis: 0,
+    totalFiles: 0,
+    qualityScore: 0,
+    pendingIssues: 0,
+  });
 
   useEffect(() => {
-    fetchStatistics();
-    fetchRecentAssets();
+    // 模拟加载数据
+    setTimeout(() => {
+      setStats({
+        totalAssets: 1256,
+        totalTables: 856,
+        totalApis: 320,
+        totalFiles: 80,
+        qualityScore: 85,
+        pendingIssues: 23,
+      });
+      setLoading(false);
+    }, 500);
   }, []);
 
-  // 跳转到资产详情
-  const handleAssetClick = (id: string) => {
-    navigate(`/assets/detail/${id}`);
-  };
+  const recentAssets: DataAsset[] = [
+    {
+      id: '1',
+      name: 'customer_info',
+      type: 'TABLE',
+      description: '客户信息主表',
+      sensitivityLevel: 'SENSITIVE',
+      owner: { id: '1', username: 'zhangsan', realName: '张三' },
+      createdAt: '2024-01-15',
+    },
+    {
+      id: '2',
+      name: 'order_service',
+      type: 'API',
+      description: '订单查询服务API',
+      sensitivityLevel: 'INTERNAL',
+      owner: { id: '2', username: 'lisi', realName: '李四' },
+      createdAt: '2024-01-14',
+    },
+    {
+      id: '3',
+      name: 'product_catalog',
+      type: 'TABLE',
+      description: '产品目录表',
+      sensitivityLevel: 'PUBLIC',
+      owner: { id: '3', username: 'wangwu', realName: '王五' },
+      createdAt: '2024-01-13',
+    },
+    {
+      id: '4',
+      name: 'sales_report',
+      type: 'FILE',
+      description: '销售报表导出文件',
+      sensitivityLevel: 'INTERNAL',
+      owner: { id: '4', username: 'zhaoliu', realName: '赵六' },
+      createdAt: '2024-01-12',
+    },
+  ];
 
-  // 资产表格列配置
-  const recentAssetColumns: ColumnsType<DataAsset> = [
+  const quickActions = [
+    { name: '注册资产', icon: <DatabaseOutlined />, path: '/assets/create', color: '#1890ff' },
+    { name: '资产搜索', icon: <FileTextOutlined />, path: '/assets/list', color: '#52c41a' },
+    { name: '查看血缘', icon: <ApiOutlined />, path: '/lineage/graph', color: '#722ed1' },
+    { name: '质量检测', icon: <SafetyOutlined />, path: '/quality/rules', color: '#fa8c16' },
+  ];
+
+  const columns: ColumnsType<DataAsset> = [
+    { title: '名称', dataIndex: 'name', key: 'name' },
+    { title: '类型', dataIndex: 'type', key: 'type', render: (type) => <Tag>{type}</Tag> },
     {
-      title: '资产名称',
-      dataIndex: 'name',
-      key: 'name',
-      render: (name: string, record) => (
-        <a onClick={() => handleAssetClick(record.id)}>{name}</a>
-      ),
-    },
-    {
-      title: '类型',
-      dataIndex: 'assetType',
-      key: 'assetType',
-      width: 100,
-      render: (type: string) => {
-        const typeMap: Record<string, { color: string; label: string }> = {
-          TABLE: { color: 'blue', label: '数据表' },
-          VIEW: { color: 'green', label: '视图' },
-          FILE: { color: 'orange', label: '文件' },
-          API: { color: 'purple', label: 'API' },
-          STREAM: { color: 'cyan', label: '流数据' },
-        };
-        const config = typeMap[type] || { color: 'default', label: type };
-        return <Tag color={config.color}>{config.label}</Tag>;
-      },
-    },
-    {
-      title: '敏感级别',
+      title: '敏感度',
       dataIndex: 'sensitivityLevel',
       key: 'sensitivityLevel',
-      width: 100,
-      render: (level: string) => {
-        const levelMap: Record<string, { color: string; label: string }> = {
-          PUBLIC: { color: 'green', label: '公开' },
-          INTERNAL: { color: 'blue', label: '内部' },
-          CONFIDENTIAL: { color: 'orange', label: '机密' },
-          RESTRICTED: { color: 'red', label: '限制' },
+      render: (level) => {
+        const colors: Record<string, string> = {
+          PUBLIC: 'green',
+          INTERNAL: 'blue',
+          SENSITIVE: 'orange',
+          HIGHLY_SENSITIVE: 'red',
         };
-        const config = levelMap[level] || { color: 'default', label: level };
-        return <Tag color={config.color}>{config.label}</Tag>;
+        return <Tag color={colors[level]}>{level}</Tag>;
       },
     },
+    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
     {
-      title: '更新时间',
-      dataIndex: 'updateTime',
-      key: 'updateTime',
-      width: 120,
-      render: (time: string) => time ? new Date(time).toLocaleDateString() : '-',
+      title: '操作',
+      key: 'action',
+      render: (_, record) => (
+        <Button type="link" onClick={() => navigate(`/assets/detail/${record.id}`)}>
+          查看详情
+        </Button>
+      ),
     },
   ];
 
-  // 质量概览数据
-  const qualityItems = [
-    {
-      title: '总规则数',
-      value: qualityOverview.totalRules || 0,
-      icon: <CheckCircleOutlined />,
-      color: '#1890ff',
-    },
-    {
-      title: '通过规则',
-      value: qualityOverview.passedRules || 0,
-      icon: <CheckCircleOutlined />,
-      color: '#52c41a',
-    },
-    {
-      title: '失败规则',
-      value: qualityOverview.failedRules || 0,
-      icon: <WarningOutlined />,
-      color: '#f5222d',
-    },
-    {
-      title: '定时检查',
-      value: qualityOverview.scheduledChecks || 0,
-      icon: <ClockCircleOutlined />,
-      color: '#faad14',
-    },
-  ];
-
-  // 快速入口配置
-  const quickActions = [
-    {
-      title: '注册资产',
-      icon: <DatabaseOutlined />,
-      path: '/assets/create',
-      color: '#1890ff',
-    },
-    {
-      title: '资产目录',
-      icon: <FolderOutlined />,
-      path: '/catalog/tree',
-      color: '#52c41a',
-    },
-    {
-      title: '血缘分析',
-      icon: <EyeOutlined />,
-      path: '/lineage/graph',
-      color: '#722ed1',
-    },
-    {
-      title: '质量检查',
-      icon: <CheckCircleOutlined />,
-      path: '/quality/overview',
-      color: '#faad14',
-    },
+  const notifications = [
+    { id: 1, title: '质量检测完成', desc: 'customer_info 表质量评分 95 分', time: '10分钟前' },
+    { id: 2, title: '新资产注册', desc: 'order_history 表已注册', time: '1小时前' },
+    { id: 3, title: '血缘更新', desc: 'sales_report 血缘关系已更新', time: '2小时前' },
   ];
 
   return (
-    <div className={styles.container}>
+    <div className={styles.homePage}>
       {/* 欢迎区域 */}
-      <div className={styles.welcome}>
-        <div>
-          <Title level={3} className={styles.welcomeTitle}>
-            欢迎回来 👋
-          </Title>
-          <Text type="secondary">
-            这里展示您的数据资产概览和最近活动
-          </Text>
-        </div>
-        <Space>
-          <Button onClick={() => navigate('/assets/create')}>
-            <DatabaseOutlined /> 注册资产
-          </Button>
-          <Button type="primary" onClick={() => navigate('/lineage/graph')}>
-            <EyeOutlined /> 数据血缘
-          </Button>
-        </Space>
+      <div className={styles.welcomeSection}>
+        <Title level={3}>欢迎回来</Title>
+        <Text type="secondary">今天是美好的一天，开始管理您的数据资产吧！</Text>
       </div>
 
       {/* 统计卡片 */}
-      <Row gutter={[16, 16]} className={styles.statisticsRow}>
-        {statisticsCards.map((card) => (
-          <Col xs={24} sm={12} lg={6} key={card.key}>
-            <Card className={styles.statisticCard} loading={loading}>
-              <Statistic
-                title={card.title}
-                value={statistics[card.key] || 0}
-                prefix={<span style={{ color: card.color }}>{card.icon}</span>}
-                suffix={card.suffix}
-                valueStyle={{ color: card.color }}
-              />
-            </Card>
-          </Col>
-        ))}
+      <Row gutter={[16, 16]} className={styles.statsRow}>
+        <Col xs={24} sm={12} lg={6}>
+          <StatisticsCard
+            title="资产总数"
+            value={stats.totalAssets}
+            change={{ value: 12.5, trend: 'up', label: '较上月' }}
+            icon={<DatabaseOutlined />}
+            color="#1890ff"
+            loading={loading}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatisticsCard
+            title="数据库表"
+            value={stats.totalTables}
+            change={{ value: 8.2, trend: 'up' }}
+            icon={<FileTextOutlined />}
+            color="#52c41a"
+            loading={loading}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatisticsCard
+            title="API 服务"
+            value={stats.totalApis}
+            change={{ value: 15.3, trend: 'up' }}
+            icon={<ApiOutlined />}
+            color="#722ed1"
+            loading={loading}
+          />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StatisticsCard
+            title="质量评分"
+            value={stats.qualityScore}
+            suffix="分"
+            precision={1}
+            change={{ value: 3.2, trend: 'up' }}
+            icon={<SafetyOutlined />}
+            color="#fa8c16"
+            loading={loading}
+          />
+        </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
-        {/* 质量概览 */}
+      {/* 快捷入口 */}
+      <Card title="快捷入口" className={styles.quickActions}>
+        <Row gutter={16}>
+          {quickActions.map((action) => (
+            <Col xs={12} sm={6} key={action.name}>
+              <div
+                className={styles.quickActionItem}
+                onClick={() => navigate(action.path)}
+                style={{ borderColor: action.color }}
+              >
+                <div className={styles.quickActionIcon} style={{ color: action.color }}>
+                  {action.icon}
+                </div>
+                <span>{action.name}</span>
+              </div>
+            </Col>
+          ))}
+        </Row>
+      </Card>
+
+      {/* 图表区域 */}
+      <Row gutter={[16, 16]} className={styles.chartsRow}>
         <Col xs={24} lg={12}>
+          <Card title="资产增长趋势">
+            <AssetGrowthChart loading={loading} height={300} />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="资产分布">
+            <AssetDistributionChart loading={loading} height={300} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 下方两栏 */}
+      <Row gutter={[16, 16]} className={styles.bottomRow}>
+        {/* 最近资产 */}
+        <Col xs={24} lg={14}>
           <Card
-            title="数据质量概览"
+            title="最近资产"
             extra={
-              <Button type="link" onClick={() => navigate('/quality/overview')}>
-                查看详情 <ArrowRightOutlined />
+              <Button type="link" onClick={() => navigate('/assets/list')}>
+                查看全部 <ArrowRightOutlined />
               </Button>
             }
-            className={styles.card}
           >
-            <Row gutter={16}>
-              {qualityItems.map((item, index) => (
-                <Col span={12} key={index} className={styles.qualityItem}>
-                  <Space align="start">
-                    <span style={{ color: item.color }}>{item.icon}</span>
-                    <div>
-                      <Text type="secondary">{item.title}</Text>
-                      <div className={styles.qualityValue}>{item.value}</div>
-                    </div>
-                  </Space>
-                </Col>
-              ))}
-            </Row>
-            
-            {qualityOverview.totalRules > 0 && (
-              <div className={styles.qualityProgress}>
-                <Text type="secondary">质量评分</Text>
-                <Progress
-                  percent={Math.round(
-                    ((qualityOverview.passedRules || 0) / (qualityOverview.totalRules || 1)) * 100
-                  )}
-                  strokeColor="#52c41a"
-                  format={(percent) => <span style={{ color: '#52c41a' }}>{percent}%</span>}
-                />
-              </div>
-            )}
+            <Table
+              columns={columns}
+              dataSource={recentAssets}
+              rowKey="id"
+              pagination={false}
+              size="small"
+            />
           </Card>
         </Col>
 
-        {/* 快速入口 */}
-        <Col xs={24} lg={12}>
-          <Card title="快速入口" className={styles.card}>
-            <Row gutter={[16, 16]}>
-              {quickActions.map((action, index) => (
-                <Col xs={12} sm={6} key={index}>
-                  <div
-                    className={styles.quickAction}
-                    onClick={() => navigate(action.path)}
-                    style={{ '--action-color': action.color } as React.CSSProperties}
-                  >
-                    <div className={styles.quickActionIcon} style={{ backgroundColor: action.color }}>
-                      {action.icon}
-                    </div>
-                    <Text className={styles.quickActionTitle}>{action.title}</Text>
-                  </div>
-                </Col>
-              ))}
-            </Row>
+        {/* 右侧边栏 */}
+        <Col xs={24} lg={10}>
+          {/* 通知 */}
+          <Card title="通知" className={styles.notificationCard}>
+            <List
+              itemLayout="horizontal"
+              dataSource={notifications}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    avatar={<Avatar icon={<BellOutlined />} style={{ backgroundColor: '#1890ff' }} />}
+                    title={item.title}
+                    description={
+                      <Space direction="vertical" size={0}>
+                        <Text type="secondary">{item.desc}</Text>
+                        <Text type="secondary" className={styles.timeText}>
+                          <CalendarOutlined /> {item.time}
+                        </Text>
+                      </Space>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          </Card>
+
+          {/* 待办事项 */}
+          <Card title="待办事项" className={styles.todoCard}>
+            <List
+              itemLayout="horizontal"
+              dataSource={[
+                { id: 1, title: '审核新注册资产', count: 5 },
+                { id: 2, title: '处理质量问题', count: 3 },
+                { id: 3, title: '更新血缘关系', count: 2 },
+              ]}
+              renderItem={(item) => (
+                <List.Item
+                  actions={[
+                    <Button type="primary" size="small" key="handle">
+                      处理
+                    </Button>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={<Text>{item.title}</Text>}
+                    description={<Tag color="blue">{item.count} 项待处理</Tag>}
+                  />
+                </List.Item>
+              )}
+            />
           </Card>
         </Col>
       </Row>
-
-      {/* 最近访问 */}
-      <Card
-        title="最近访问"
-        extra={
-          <Button type="link" onClick={() => navigate('/assets/list')}>
-            查看全部 <ArrowRightOutlined />
-          </Button>
-        }
-        className={styles.card}
-      >
-        <Table
-          columns={recentAssetColumns}
-          dataSource={recentAssets}
-          rowKey="id"
-          loading={loading}
-          pagination={false}
-          size="middle"
-        />
-      </Card>
     </div>
   );
 };
 
-export default Home;
+export default HomePage;

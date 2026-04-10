@@ -1,49 +1,49 @@
-/**
- * 影响分析页面样式
- */
-
-.container {
-  padding: 24px;
-  background: #f0f2f5;
-  min-height: calc(100vh - 64px);
-}
-
-.alert {
-  margin-bottom: 16px;
-  border-radius: 8px;
-}
-
-.searchCard {
-  margin-bottom: 16px;
-  border-radius: 8px;
-}
-
-.resultCard {
-  margin-bottom: 16px;
-  border-radius: 8px;
-}
-
-.statsRow {
-  margin-bottom: 16px;
-}
-
-.statCard {
-  border-radius: 8px;
-  text-align: center;
-
-  :global {
-    .ant-card-body {
-      padding: 16px;
+.impactAnalysisPage {
+  padding: 16px;
+  
+  .analysisCard {
+    margin-bottom: 16px;
+  }
+  
+  .treeCard {
+    :global {
+      .ant-tree {
+        background: transparent;
+      }
     }
   }
-}
-
-.statValue {
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.suggestCard {
-  border-radius: 8px;
+  
+  .graphCard {
+    margin-bottom: 16px;
+  }
+  
+  .affectedCard {
+    :global {
+      .ant-table-tbody > tr > td {
+        padding: 8px;
+      }
+    }
+  }
+  
+  .emptyCard {
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .emptyState {
+    text-align: center;
+    color: #999;
+    
+    p {
+      margin-top: 16px;
+      font-size: 16px;
+    }
+    
+    .emptyHint {
+      font-size: 12px;
+      color: #d9d9d9;
+    }
+  }
 }
