@@ -1,0 +1,215 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: edams-llm
+
+  # Redis配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 7
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: -1ms
+
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+
+  # Spring AI配置
+  ai:
+    # OpenAI配置
+    openai:
+      api-key: ${OPENAI_API_KEY:sk-test}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: gpt-4-turbo-preview
+          temperature: 0.7
+          max-tokens: 2000
+    # Anthropic (Claude) 配置
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:sk-ant-test}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        options:
+          model: claude-3-opus-20240229
+          max-tokens: 2000
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.llm.entity
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Springdoc OpenAPI配置
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.edams: DEBUG
+    org.springframework.ai: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# LLM服务配置
+llm:
+  # 提供商配置
+  providers:
+    openai:
+      enabled: true
+      priority: 1
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      api-key: ${OPENAI_API_KEY:}
+      models:
+        - name: gpt-4-turbo-preview
+          display-name: GPT-4 Turbo
+          max-tokens: 128000
+          input-price: 0.01
+          output-price: 0.03
+        - name: gpt-3.5-turbo
+          display-name: GPT-3.5 Turbo
+          max-tokens: 16385
+          input-price: 0.0005
+          output-price: 0.0015
+    anthropic:
+      enabled: true
+      priority: 2
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      api-key: ${ANTHROPIC_API_KEY:}
+      models:
+        - name: claude-3-opus-20240229
+          display-name: Claude 3 Opus
+          max-tokens: 200000
+          input-price: 0.015
+          output-price: 0.075
+        - name: claude-3-sonnet-20240229
+          display-name: Claude 3 Sonnet
+          max-tokens: 200000
+          input-price: 0.003
+          output-price: 0.015
+    qianwen:
+      enabled: true
+      priority: 3
+      base-url: ${QIANWEN_BASE_URL:https://dashscope.aliyuncs.com/api/v1}
+      api-key: ${QIANWEN_API_KEY:}
+      models:
+        - name: qwen-turbo
+          display-name: 通义千问 Turbo
+          max-tokens: 8000
+          input-price: 0.002
+          output-price: 0.002
+        - name: qwen-max
+          display-name: 通义千问 Max
+          max-tokens: 8000
+          input-price: 0.02
+          output-price: 0.06
+    ernie:
+      enabled: true
+      priority: 4
+      base-url: ${ERNIE_BASE_URL:https://aip.baidubce.com/rpc/2.0/ai_custom/v1}
+      api-key: ${ERNIE_API_KEY:}
+      secret-key: ${ERNIE_SECRET_KEY:}
+      models:
+        - name: ernie-bot-4
+          display-name: 文心一言 4.0
+          max-tokens: 3000
+          input-price: 0.012
+          output-price: 0.012
+
+  # 模型选择策略
+  strategy:
+    # 默认策略: COST_OPTIMIZED(成本优先), LATENCY_OPTIMIZED(延迟优先), BALANCED(均衡), QUALITY_FIRST(质量优先)
+    default: BALANCED
+    # 允许自动降级
+    allow-fallback: true
+    # 最大重试次数
+    max-retries: 3
+    # 重试间隔(ms)
+    retry-delay: 1000
+
+  # 配额管理
+  quota:
+    # 默认每日Token配额
+    default-daily-tokens: 1000000
+    # 默认每分钟请求配额
+    default-rpm: 60
+    # 配额检查模式: STRICT(严格), RELAXED(宽松)
+    check-mode: STRICT
+
+  # 熔断配置
+  circuit-breaker:
+    # 失败率阈值
+    failure-rate-threshold: 50
+    # 滑动窗口大小
+    sliding-window-size: 10
+    # 熔断持续时间(s)
+    wait-duration-in-open-state: 30
+    # 半开状态允许的调用次数
+    permitted-calls-in-half-open-state: 3
+
+# 服务降级配置
+resilience4j:
+  circuitbreaker:
+    instances:
+      llm:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        permittedNumberOfCallsInHalfOpenState: 3
+        slidingWindowType: COUNT_BASED
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+  retry:
+    instances:
+      llm:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+  ratelimiter:
+    instances:
+      llm:
+        registerHealthIndicator: true
+        limitForPeriod: 100
+        limitRefreshPeriod: 1m
+        timeoutDuration: 5s

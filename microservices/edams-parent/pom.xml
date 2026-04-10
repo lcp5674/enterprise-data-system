@@ -36,6 +36,19 @@
         <module>edams-user</module>
         <module>edams-permission</module>
         <module>edams-notification</module>
+        
+        <!-- 知识智能域 -->
+        <module>edams-knowledge</module>
+        <module>edams-llm</module>
+        <module>edams-chatbot</module>
+        
+        <!-- 高级功能域服务 -->
+        <module>edge-iot-service</module>
+        <module>value-service</module>
+        <module>sla-service</module>
+        <module>incentive-service</module>
+        <module>watermark-service</module>
+        <module>sandbox-service</module>
     </modules>
     
     <dependencyManagement>
