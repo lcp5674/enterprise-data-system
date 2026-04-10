@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus自身
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Nacos
+  - job_name: 'nacos'
+    metrics_path: '/nacos/actuator/prometheus'
+    static_configs:
+      - targets: ['nacos:8848']
+
+  # Spring Boot应用
+  - job_name: 'edams-services'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'edams-gateway:8888'
+          - 'edams-auth:8081'
+          - 'edams-asset:8082'
+        labels:
+          group: 'edams'

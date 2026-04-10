@@ -1,0 +1,534 @@
+# =====================================================
+# EDAMS - 本地开发环境 Docker Compose
+# 企业数据资产管理系统 - 开发环境
+# =====================================================
+
+version: '3.8'
+
+name: edams-dev
+
+# 网络配置
+networks:
+  edams-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# 卷定义
+volumes:
+  pg_data_dev:
+  redis_data_dev:
+  es_data_dev:
+  neo4j_data_dev:
+  kafka_data_dev:
+  mongo_data_dev:
+  prometheus_data_dev:
+  grafana_data_dev:
+
+# 服务定义
+services:
+  # ==================== 数据库服务 ====================
+
+  postgresql-dev:
+    image: postgres:15-alpine
+    container_name: edams-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edams_dev
+      POSTGRES_USER: edams_dev
+      POSTGRES_PASSWORD: edams_dev_123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      PGTZ: Asia/Shanghai
+      # 性能优化参数
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 512MB
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data_dev:/var/lib/postgresql/data
+      - ./init/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
+    command:
+      - postgres
+      - -c shared_buffers=256MB
+      - -c effective_cache_size=512MB
+      - -c maintenance_work_mem=64MB
+      - -c checkpoint_completion_target=0.9
+      - -c wal_buffers=16MB
+      - -c default_statistics_target=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edams_dev -d edams_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - edams-dev
+
+  timescaledb-dev:
+    image: timescale/timescaledb:2.12-pg15
+    container_name: edams-timescaledb-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edams_metrics
+      POSTGRES_USER: metrics
+      POSTGRES_PASSWORD: metrics_dev_123
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./volumes/timescaledb:/var/lib/postgresql/data
+    networks:
+      - edams-dev
+
+  redis-dev:
+    image: redis:7.2-alpine
+    container_name: edams-redis-dev
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass redis_dev_123
+      - --appendonly yes
+      - --maxmemory 256mb
+      - --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_dev_123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edams-dev
+
+  # ==================== 数据存储服务 ====================
+
+  elasticsearch-dev:
+    image: elasticsearch:8.11.0
+    container_name: edams-elasticsearch-dev
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - cluster.name=edams-dev-cluster
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data_dev:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    networks:
+      - edams-dev
+
+  kibana-dev:
+    image: kibana:8.11.0
+    container_name: edams-kibana-dev
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch-dev:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: elastic_dev_123
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch-dev:
+        condition: service_healthy
+    networks:
+      - edams-dev
+
+  neo4j-dev:
+    image: neo4j:5.15-community
+    container_name: edams-neo4j-dev
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_dev_123
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512M
+      NEO4J_server_logs_debug_level: INFO
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: yes
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4j_data_dev:/data
+      - neo4j_logs_dev:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-dev
+
+  mongodb-dev:
+    image: mongo:7.0
+    container_name: edams-mongodb-dev
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: mongo_dev_123
+      MONGO_INITDB_DATABASE: edams
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data_dev:/data/db
+    command:
+      - mongod
+      - "--replSet"
+      - "edams-dev"
+      - "--keyFile"
+      - "/data/repl.key"
+      - "--bind_ip_all"
+    healthcheck:
+      test: echo 'try { rs.status().ok } catch(e) { 0 }' | mongosh mongodb://admin:mongo_dev_123@localhost:27017/admin --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-dev
+
+  # ==================== 消息队列服务 ====================
+
+  zookeeper-dev:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: edams-zookeeper-dev
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 5
+    ports:
+      - "2181:2181"
+    networks:
+      - edams-dev
+
+  kafka-dev:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: edams-kafka-dev
+    restart: unless-stopped
+    depends_on:
+      - zookeeper-dev
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-dev:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka-dev:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_COMPRESSION_TYPE: gzip
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data_dev:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "kafka-topics",
+          "--bootstrap-server",
+          "localhost:9092",
+          "--list"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-dev
+
+  kafka-ui-dev:
+    image: provectuslabs/kafka-ui:latest
+    container_name: edams-kafka-ui-dev
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-dev:9093
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka-dev:
+        condition: service_started
+    networks:
+      - edams-dev
+
+  # ==================== 服务注册与配置中心 ====================
+
+  nacos-dev:
+    image: nacos/nacos-server:v2.3.0
+    container_name: edams-nacos-dev
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: postgresql-dev
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_PORT: 5432
+      MYSQL_SERVICE_USER: edams_dev
+      MYSQL_SERVICE_PASSWORD: edams_dev_123
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      NACOS_AUTH_ENABLE: true
+      NACOS_AUTH_TOKEN_EXPIRE_SECONDS: 36000
+      NACOS_AUTH_TOKEN: Nacos_Token_Secret_123
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    depends_on:
+      postgresql-dev:
+        condition: service_healthy
+    volumes:
+      - ./volumes/nacos/logs:/home/nacos/logs
+      - ./volumes/nacos/conf:/home/nacos/conf
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-dev
+
+  sentinel-dev:
+    image: bladex/sentinel-dashboard:2.0.1
+    container_name: edams-sentinel-dev
+    restart: unless-stopped
+    environment:
+      SENTINEL_DASHBOARD_AUTH_USERNAME: sentinel
+      SENTINEL_DASHBOARD_AUTH_PASSWORD: sentinel_dev_123
+      JAVA_OPTS: "-Dserver.port=8858"
+    ports:
+      - "8858:8858"
+    networks:
+      - edams-dev
+
+  # ==================== 监控告警服务 ====================
+
+  prometheus-dev:
+    image: prom/prometheus:v2.47.0
+    container_name: edams-prometheus-dev
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data_dev:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+      - "--web.external-url=http://localhost:9090"
+      - "--storage.tsdb.retention.time=15d"
+    ports:
+      - "9090:9090"
+    networks:
+      - edams-dev
+
+  grafana-dev:
+    image: grafana/grafana:10.2.0
+    container_name: edams-grafana-dev
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: grafana_dev_123
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel,grafana-worldmap-panel"
+    volumes:
+      - grafana_data_dev:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus-dev
+    networks:
+      - edams-dev
+
+  loki-dev:
+    image: grafana/loki:3.0.0
+    container_name: edams-loki-dev
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./volumes/loki:/loki
+    networks:
+      - edams-dev
+
+  promtail-dev:
+    image: grafana/promtail:3.0.0
+    container_name: edams-promtail-dev
+    restart: unless-stopped
+    volumes:
+      - /var/log:/var/log
+      - ./monitoring/loki/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki-dev
+    networks:
+      - edams-dev
+
+  # ==================== 链路追踪服务 ====================
+
+  jaeger-dev:
+    image: jaegertracing/all-in-one:1.53
+    container_name: edams-jaeger-dev
+    restart: unless-stopped
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+      LOG_LEVEL: info
+    ports:
+      - "16686:16686" # UI
+      - "14268:14268" # collector http
+      - "14250:14250" # collector grpc
+      - "6831:6831/udp" # agent
+      - "5778:5778" # config
+    networks:
+      - edams-dev
+
+  # ==================== 应用服务 (开发模式) ====================
+
+  edams-gateway-dev:
+    image: ${REGISTRY:-edams}/edams-gateway:${TAG:-latest}
+    container_name: edams-gateway-dev
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev,docker
+      - SERVER_PORT=8888
+      - NACOS_SERVER_ADDR=nacos-dev:8848
+      - NACOS_NAMESPACE=dev
+      - NACOS_USERNAME=nacos
+      - NACOS_PASSWORD=nacos_dev_123
+      - JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "8888:8888"
+    depends_on:
+      nacos-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - edams-dev
+
+  edams-auth-dev:
+    image: ${REGISTRY:-edams}/edams-auth:${TAG:-latest}
+    container_name: edams-auth-dev
+    restart: unless-stopped
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev,docker
+      - SERVER_PORT=8081
+      - NACOS_SERVER_ADDR=nacos-dev:8848
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgresql-dev:5432/edams_dev
+      - SPRING_DATASOURCE_USERNAME=edams_dev
+      - SPRING_DATASOURCE_PASSWORD=edams_dev_123
+      - SPRING_REDIS_HOST=redis-dev
+      - SPRING_REDIS_PASSWORD=redis_dev_123
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgresql-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
+      nacos-dev:
+        condition: service_healthy
+    networks:
+      - edams-dev
+
+  # ==================== 工具服务 ====================
+
+  pgadmin-dev:
+    image: dpage/pgadmin4:latest
+    container_name: edams-pgadmin-dev
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@edams.com
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_dev_123
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - ./volumes/pgadmin/servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgresql-dev
+    networks:
+      - edams-dev
+
+  redis-commander-dev:
+    image: rediscommander/redis-commander:latest
+    container_name: edams-redis-commander-dev
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis-dev:6379:0:redis_dev_123
+    ports:
+      - "8088:8081"
+    depends_on:
+      - redis-dev
+    networks:
+      - edams-dev
+
+  # ==================== 辅助服务 ====================
+
+  minio-dev:
+    image: minio/minio:latest
+    container_name: edams-minio-dev
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    volumes:
+      - ./volumes/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - edams-dev
+
+  # ==================== 反向代理 ====================
+
+  nginx-dev:
+    image: nginx:alpine
+    container_name: edams-nginx-dev
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/sites:/etc/nginx/sites-enabled
+      - ./nginx/ssl:/etc/nginx/ssl
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - edams-gateway-dev
+      - grafana-dev
+      - kibana-dev
+      - kafka-ui-dev
+    networks:
+      - edams-dev

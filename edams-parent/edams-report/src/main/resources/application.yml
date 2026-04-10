@@ -1,0 +1,107 @@
+spring:
+  application:
+    name: edams-report
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+        file-extension: yml
+        refresh-enabled: true
+
+server:
+  port: 8084
+  servlet:
+    context-path: /edams-report
+
+# 数据库配置
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root123456}
+
+# Redis配置
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
+      database: 2
+
+# Kafka配置
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    consumer:
+      group-id: edams-report-group
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# 对象存储配置
+oss:
+  endpoint: ${OSS_ENDPOINT:oss-cn-shanghai.aliyuncs.com}
+  access-key-id: ${OSS_ACCESS_KEY_ID:}
+  access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+  bucket-name: ${OSS_BUCKET:edams-reports}
+  domain: ${OSS_DOMAIN:}
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.report.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 报表配置
+report:
+  # 报表存储路径
+  storage-path: /data/reports
+  # 最大文件大小(MB)
+  max-file-size: 100
+  # 报表过期时间(天)
+  expire-days: 30
+  # 支持的导出格式
+  export-formats:
+    - PDF
+    - EXCEL
+    - WORD
+    - HTML
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.enterprise.edams: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+# Swagger配置
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html

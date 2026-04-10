@@ -1,0 +1,48 @@
+{
+  "name": "enterprise-data-dev-team",
+  "leadAgentId": "9ecaad54875a429dbd83e62f72220946",
+  "workspacePath": "/System/Volumes/Data/data/GitCode/enterprise-data-system",
+  "createdAt": "2026-04-10T05:56:52.732Z",
+  "options": {
+    "workspacePath": "/System/Volumes/Data/data/GitCode/enterprise-data-system",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@enterprise-data-dev-team",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "architect-lead@enterprise-data-dev-team",
+      "name": "architect-lead",
+      "role": "初始化项目脚手架"
+    },
+    {
+      "memberId": "backend-dev-basic@enterprise-data-dev-team",
+      "name": "backend-dev-basic",
+      "role": "开发基础支撑域服务"
+    },
+    {
+      "memberId": "backend-dev-discovery@enterprise-data-dev-team",
+      "name": "backend-dev-discovery",
+      "role": "开发资产发现域服务"
+    },
+    {
+      "memberId": "backend-dev-governance@enterprise-data-dev-team",
+      "name": "backend-dev-governance",
+      "role": "开发资产治理域服务"
+    },
+    {
+      "memberId": "frontend-dev@enterprise-data-dev-team",
+      "name": "frontend-dev",
+      "role": "开发前端应用"
+    },
+    {
+      "memberId": "devops-engineer@enterprise-data-dev-team",
+      "name": "devops-engineer",
+      "role": "配置基础设施"
+    }
+  ],
+  "isAutoTeam": false
+}

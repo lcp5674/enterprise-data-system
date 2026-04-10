@@ -1,0 +1,104 @@
+spring:
+  application:
+    name: edams-gateway
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+        file-extension: yml
+        refresh-enabled: true
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # 认证服务
+        - id: edams-auth
+          uri: lb://edams-auth
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=1
+        # 资产管理服务
+        - id: edams-asset
+          uri: lb://edams-asset
+          predicates:
+            - Path=/api/v1/assets/**
+          filters:
+            - StripPrefix=1
+        # 用户管理服务
+        - id: edams-admin
+          uri: lb://edams-admin
+          predicates:
+            - Path=/api/v1/admin/**
+          filters:
+            - StripPrefix=1
+        # 血缘管理服务
+        - id: edams-lineage
+          uri: lb://edams-lineage
+          predicates:
+            - Path=/api/v1/lineage/**
+          filters:
+            - StripPrefix=1
+        # 质量管理服务
+        - id: edams-quality
+          uri: lb://edams-quality
+          predicates:
+            - Path=/api/v1/quality/**
+          filters:
+            - StripPrefix=1
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+server:
+  port: 8888
+
+# Redis配置 (用于限流)
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
+      database: 0
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+  health:
+    gateway:
+      enabled: true
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"

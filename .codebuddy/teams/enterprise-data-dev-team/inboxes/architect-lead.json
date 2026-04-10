@@ -1,0 +1,11 @@
+[
+  {
+    "id": "msg-1775800902784-2bn8n4",
+    "from": "team-lead",
+    "to": "architect-lead",
+    "type": "message",
+    "content": "请在团队中增加一个负责**数据分析服务(OLAP)**的后端开发工程师。\n\n根据技术架构文档，系统使用ClickHouse作为OLAP引擎，需要开发：\n1. **analytics-service（数据分析服务）** - 负责Ad-hoc查询、自助分析、资产价值分析\n2. 可能还需要 **report-service（报表服务）** - 负责报表生成与分发\n\n请在任务分配中补充这个模块。",
+    "timestamp": "2026-04-10T06:01:42.784Z",
+    "read": true
+  }
+]

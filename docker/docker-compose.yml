@@ -1,0 +1,272 @@
+version: '3.8'
+
+services:
+  # ==================== 基础服务 ====================
+  
+  mysql:
+    image: mysql:8.0
+    container_name: edams-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: edams
+      MYSQL_USER: edams
+      MYSQL_PASSWORD: edams123
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_connections=1000
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edams-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: edams-redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis123 --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edams-network
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: edams-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_DB_NAME: nacos
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: root123456
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-network
+
+  sentinel:
+    image: bladex/sentinel-dashboard:1.8.6
+    container_name: edams-sentinel
+    restart: unless-stopped
+    ports:
+      - "8858:8858"
+    environment:
+      JAVA_OPTS: "-Dserver.port=8858"
+    networks:
+      - edams-network
+
+  # ==================== 数据存储服务 ====================
+  
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: edams-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-network
+
+  kibana:
+    image: kibana:8.11.0
+    container_name: edams-kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - edams-network
+
+  neo4j:
+    image: neo4j:5.14-community
+    container_name: edams-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/neo4j123
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512M
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: edams-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: mongo123
+      MONGO_INITDB_DATABASE: edams
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-network
+
+  # ==================== 消息队列服务 ====================
+  
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: edams-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - edams-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: edams-kafka-ui
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8090:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - edams-network
+
+  # ==================== 运维监控服务 ====================
+  
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: edams-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    networks:
+      - edams-network
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: edams-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - edams-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.50
+    container_name: edams-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_ZIPKIN_HOST-port=:9411
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+      - "14268:14268"
+    networks:
+      - edams-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  es_data:
+  neo4j_data:
+  neo4j_logs:
+  mongodb_data:
+  kafka_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  edams-network:
+    driver: bridge
