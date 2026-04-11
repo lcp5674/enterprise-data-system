@@ -17,49 +17,23 @@ spring:
         refresh-enabled: true
 
 server:
-  port: 8083
+  port: 8087
   servlet:
     context-path: /edams-analytics
 
-# 数据库配置 (用于存储分析配置)
+# 数据库配置
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root123456}
-
-# ClickHouse配置 (OLAP引擎)
-clickhouse:
-  url: jdbc:clickhouse://${CLICKHOUSE_HOST:localhost}:${CLICKHOUSE_PORT:8123}/${CLICKHOUSE_DB:default}
-  username: ${CLICKHOUSE_USERNAME:default}
-  password: ${CLICKHOUSE_PASSWORD:}
-  connection-pool:
-    size: 20
-    max-size: 50
-    min-size: 5
-    connection-timeout: 30000
-    socket-timeout: 300000
-
-# Redis配置 (查询缓存)
-spring:
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:redis123}
-      database: 1
-
-# Kafka配置 (异步分析任务)
-spring:
-  kafka:
-    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
-    consumer:
-      group-id: edams-analytics-group
-      auto-offset-reset: earliest
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
 
 # MyBatis Plus配置
 mybatis-plus:
@@ -67,17 +41,28 @@ mybatis-plus:
   type-aliases-package: com.enterprise.edams.analytics.entity
   configuration:
     map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
 
-# 分析查询配置
-analytics:
-  # 查询超时时间(秒)
-  query-timeout: 300
-  # 最大查询行数
-  max-result-rows: 100000
-  # 查询缓存过期时间(秒)
-  cache-expire-seconds: 300
-  # 最大并发查询数
-  max-concurrent-queries: 50
+# Redis配置
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:redis123}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
 
 # Actuator配置
 management:
@@ -94,7 +79,6 @@ logging:
   level:
     root: INFO
     com.enterprise.edams: DEBUG
-    com.clickhouse: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
 
@@ -106,3 +90,11 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+
+# ClickHouse配置(可选)
+clickhouse:
+  enabled: true
+  url: jdbc:clickhouse://${CLICKHOUSE_HOST:localhost}:${CLICKHOUSE_PORT:8123}/${CLICKHOUSE_DATABASE:edams}
+  username: ${CLICKHOUSE_USERNAME:default}
+  password: ${CLICKHOUSE_PASSWORD:}
+  socket-timeout: 300000

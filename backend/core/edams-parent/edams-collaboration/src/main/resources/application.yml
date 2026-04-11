@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: edams-collaboration
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+        file-extension: yml
+        refresh-enabled: true
+
+server:
+  port: 8087
+  servlet:
+    context-path: /edams-collaboration
+
+# 数据库配置
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root123456}
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.collaboration.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 协作配置
+collaboration:
+  # 评论配置
+  comment:
+    max-length: 1000
+    max-attachments: 5
+    max-replies: 100
+  
+  # 提及配置
+  mention:
+    max-mentions-per-item: 10
+    notification-delay-seconds: 60
+  
+  # 反应配置
+  reaction:
+    allowed-types: [0, 1, 2, 3, 4, 5]
+    max-reactions-per-user: 10
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.enterprise.edams: DEBUG

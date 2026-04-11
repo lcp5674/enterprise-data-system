@@ -1,0 +1,102 @@
+-- 评论表
+CREATE TABLE IF NOT EXISTS `collaboration_comment` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `content` VARCHAR(1000) NOT NULL COMMENT '评论内容',
+    `comment_type` INT NOT NULL DEFAULT 0 COMMENT '评论类型：0-文本，1-图片，2-文件，3-链接',
+    `reference_id` BIGINT NOT NULL COMMENT '引用ID',
+    `reference_type` INT NOT NULL COMMENT '引用类型：0-数据资产，1-任务，2-文档，3-报告',
+    `parent_id` BIGINT NOT NULL DEFAULT 0 COMMENT '父评论ID',
+    `user_id` BIGINT NOT NULL COMMENT '评论者ID',
+    `user_name` VARCHAR(100) NOT NULL COMMENT '评论者姓名',
+    `user_avatar` VARCHAR(500) NULL COMMENT '评论者头像',
+    `status` INT NOT NULL DEFAULT 1 COMMENT '状态：0-草稿，1-已发布，2-已删除，3-审核中，4-审核失败',
+    `like_count` INT NOT NULL DEFAULT 0 COMMENT '点赞数',
+    `reply_count` INT NOT NULL DEFAULT 0 COMMENT '回复数',
+    `last_reply_time` DATETIME NULL COMMENT '最后回复时间',
+    `is_top` INT NOT NULL DEFAULT 0 COMMENT '是否置顶：0-否，1-是',
+    `top_time` DATETIME NULL COMMENT '置顶时间',
+    `is_essence` INT NOT NULL DEFAULT 0 COMMENT '是否精华：0-否，1-是',
+    `tenant_id` BIGINT NOT NULL COMMENT '租户ID',
+    `attachment_info` VARCHAR(500) NULL COMMENT '附件信息',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `create_by` VARCHAR(100) NULL COMMENT '创建人',
+    `update_by` VARCHAR(100) NULL COMMENT '更新人',
+    `deleted` INT NOT NULL DEFAULT 0 COMMENT '删除标记：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    INDEX idx_reference (`reference_id`, `reference_type`),
+    INDEX idx_parent_id (`parent_id`),
+    INDEX idx_user_id (`user_id`),
+    INDEX idx_status (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
+
+-- 评论线程表
+CREATE TABLE IF NOT EXISTS `collaboration_comment_thread` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `thread_title` VARCHAR(200) NOT NULL COMMENT '线程标题',
+    `thread_description` VARCHAR(500) NULL COMMENT '线程描述',
+    `reference_id` BIGINT NOT NULL COMMENT '引用ID',
+    `reference_type` INT NOT NULL COMMENT '引用类型：0-数据资产，1-任务，2-文档，3-报告',
+    `creator_id` BIGINT NOT NULL COMMENT '创建者ID',
+    `creator_name` VARCHAR(100) NOT NULL COMMENT '创建者姓名',
+    `status` INT NOT NULL DEFAULT 1 COMMENT '状态：0-草稿，1-活跃，2-关闭，3-归档',
+    `comment_count` INT NOT NULL DEFAULT 0 COMMENT '评论总数',
+    `last_comment_time` DATETIME NULL COMMENT '最后评论时间',
+    `is_locked` INT NOT NULL DEFAULT 0 COMMENT '是否锁定：0-否，1-是',
+    `lock_reason` VARCHAR(500) NULL COMMENT '锁定原因',
+    `tenant_id` BIGINT NOT NULL COMMENT '租户ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `create_by` VARCHAR(100) NULL COMMENT '创建人',
+    `update_by` VARCHAR(100) NULL COMMENT '更新人',
+    `deleted` INT NOT NULL DEFAULT 0 COMMENT '删除标记：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    INDEX idx_reference (`reference_id`, `reference_type`),
+    INDEX idx_creator_id (`creator_id`),
+    INDEX idx_status (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论线程表';
+
+-- 提及表
+CREATE TABLE IF NOT EXISTS `collaboration_mention` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `mentioned_user_id` BIGINT NOT NULL COMMENT '被提及的用户ID',
+    `mentioned_user_name` VARCHAR(100) NOT NULL COMMENT '被提及的用户姓名',
+    `source_id` BIGINT NOT NULL COMMENT '提及来源ID',
+    `source_type` INT NOT NULL COMMENT '提及来源类型：0-评论，1-任务，2-文档，3-报告',
+    `mentioner_id` BIGINT NOT NULL COMMENT '提及者ID',
+    `mentioner_name` VARCHAR(100) NOT NULL COMMENT '提及者姓名',
+    `status` INT NOT NULL DEFAULT 0 COMMENT '状态：0-未读，1-已读，2-已处理',
+    `read_time` DATETIME NULL COMMENT '阅读时间',
+    `handled_time` DATETIME NULL COMMENT '处理时间',
+    `mention_content` VARCHAR(500) NULL COMMENT '提及内容',
+    `tenant_id` BIGINT NOT NULL COMMENT '租户ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `create_by` VARCHAR(100) NULL COMMENT '创建人',
+    `update_by` VARCHAR(100) NULL COMMENT '更新人',
+    `deleted` INT NOT NULL DEFAULT 0 COMMENT '删除标记：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    INDEX idx_mentioned_user (`mentioned_user_id`),
+    INDEX idx_source (`source_id`, `source_type`),
+    INDEX idx_status (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提及表';
+
+-- 反应表
+CREATE TABLE IF NOT EXISTS `collaboration_reaction` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT,
+    `comment_id` BIGINT NOT NULL COMMENT '评论ID',
+    `reaction_type` INT NOT NULL COMMENT '反应类型：0-点赞，1-喜欢，2-赞同，3-反对，4-疑问，5-惊讶',
+    `user_id` BIGINT NOT NULL COMMENT '反应者ID',
+    `user_name` VARCHAR(100) NOT NULL COMMENT '反应者姓名',
+    `reaction_time` DATETIME NOT NULL COMMENT '反应时间',
+    `tenant_id` BIGINT NOT NULL COMMENT '租户ID',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `create_by` VARCHAR(100) NULL COMMENT '创建人',
+    `update_by` VARCHAR(100) NULL COMMENT '更新人',
+    `deleted` INT NOT NULL DEFAULT 0 COMMENT '删除标记：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    INDEX idx_comment_id (`comment_id`),
+    INDEX idx_user_id (`user_id`),
+    INDEX idx_reaction_type (`reaction_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反应表';
