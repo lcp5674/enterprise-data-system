@@ -71,30 +71,29 @@
         <!-- 基础服务 -->
         <module>edams-gateway</module>
         <module>edams-auth</module>
-        <module>edams-admin</module>
+        <module>edams-user</module>
+        <module>edams-permission</module>
+        <module>edams-notification</module>
+        <module>edams-workflow</module>
 
-        <!-- 核心业务服务 -->
+        <!-- P2优化服务 -->
         <module>edams-asset</module>
-        <module>edams-lineage</module>
-        <module>edams-quality</module>
-        <module>edams-security</module>
-        <module>edams-catalog</module>
-        <module>edams-search</module>
-
-        <!-- 高级服务 -->
-        <module>edams-knowledge</module>
-        <module>edams-insight</module>
-        <module>edams-fabric</module>
-
-        <!-- 数据分析服务 -->
         <module>edams-analytics</module>
         <module>edams-report</module>
 
-        <!-- 运维服务 -->
-        <module>edams-monitor</module>
-        <module>edams-scheduler</module>
+        <!-- P3服务 -->
+        <module>edams-knowledge</module>
+        <module>edams-llm</module>
+        <module>edams-lifecycle</module>
+        <module>edams-collaboration</module>
         <module>edams-aiops</module>
         <module>edams-chatbot</module>
+        <module>edams-version</module>
+        <module>sandbox-service</module>
+        <module>sla-service</module>
+        <module>value-service</module>
+        <module>watermark-service</module>
+        <module>incentive-service</module>
     </modules>
 
     <dependencyManagement>
