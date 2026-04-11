@@ -110,3 +110,33 @@
   - 基础设施：edams-realm.json + docker-compose + 部署指南
 - ✅ ClickHouse OLAP接入（analytics-service，53文件，含3个分析表DDL+Repository/Service/Controller完整层）
 - ⏳ 移动端自动化测试（待实现）
+
+### 项目结构（2026-04-11重构，V2.0）
+```
+enterprise-data-system/
+├── backend/                   # 后端统一目录
+│   ├── core/                 # 核心微服务（gateway, auth, asset...）
+│   │   └── edams-parent/     # Maven多模块父项目
+│   ├── domain/               # 域服务（metadata, lineage, quality...）
+│   └── discovery/            # 服务发现（catalog, datamap...）
+├── frontend/                 # React前端
+│   └── edams-web/
+├── mobile/                   # Flutter移动端
+│   └── edams-mobile/
+├── tests/                    # 测试统一
+│   ├── integration/          # 集成测试
+│   └── e2e/                 # E2E测试（Playwright）
+├── infrastructure/            # 基础设施
+│   ├── ci-cd/               # CI/CD配置
+│   ├── docker/              # Docker配置
+│   ├── helm/                # Helm Charts
+│   ├── k8s/                 # Kubernetes配置
+│   ├── keycloak/            # Keycloak配置
+│   └── monitoring/          # 监控配置
+├── charts/                   # Helm Charts
+├── docker/                   # Docker配置
+├── scripts/                  # 脚本
+└── ...
+```
+**重构前**：edams-parent/ + microservices/ + services/ 混乱分布
+**重构后**：清晰的模块化结构，Git历史完整保留（git mv）
