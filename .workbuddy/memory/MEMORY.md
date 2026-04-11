@@ -101,6 +101,43 @@
 - 集成测试：TestContainers架构完整
 - E2E测试：Playwright 7个spec覆盖主要流程
 
+### 测试覆盖率（2026-04-11新增）
+#### 集成测试
+- ✅ tests/integration/test-data.sql: 测试数据SQL
+- ✅ tests/integration/test-config.yml: 测试配置
+- ✅ tests/integration/docker-compose.test.yml: TestContainers环境
+
+#### API测试脚本
+- ✅ tests/api/auth-api-tests.sh: 认证服务API测试
+- ✅ tests/api/user-api-tests.sh: 用户服务API测试
+- ✅ tests/api/asset-api-tests.sh: 资产服务API测试
+- ✅ tests/api/governance-api-tests.sh: 治理服务API测试
+
+#### 后端Controller测试
+- ✅ edams-auth: AuthControllerTest + JwtTokenProviderTest
+- ✅ edams-gateway: GatewayRouteTest + AuthFilterTest
+- ✅ metadata-service: MetadataControllerTest
+- ✅ lineage-service: LineageControllerTest
+- ✅ quality-service: QualityControllerTest
+- ✅ standard-service: StandardControllerTest
+- ✅ governance-engine: GovernanceControllerTest
+
+#### E2E测试(Playwright)
+- ✅ tests/e2e/auth.spec.ts: 认证流程测试
+- ✅ tests/e2e/user-management.spec.ts: 用户管理测试
+- ✅ tests/e2e/asset-lifecycle.spec.ts: 资产管理测试
+- ✅ tests/e2e/governance-workflow.spec.ts: 数据治理测试
+- ✅ tests/e2e/playwright.config.ts: Playwright配置
+
+### 核心微服务实现（2026-04-11 backend-core-lead完成）
+- ✅ edams-auth: 21文件, JWT+Spring Security完整认证体系
+- ✅ edams-gateway: 9文件, 29条路由+JWT认证过滤器+三级限流+日志+异常处理
+- ✅ edams-user: 19文件, 用户/部门/角色管理CRUD
+- ✅ edams-permission: ~18文件, RBAC权限模型(权限树/菜单树/角色绑定)
+- ✅ edams-notification: 17文件, 多渠道通知(邮件/短信/Webhook)适配器模式
+- ✅ edams-workflow: 15文件, Flowable审批流引擎集成
+- **总计**: ~99 Java文件, ~248KB代码
+
 ### P2修复进度（2026-04-11全部完成）
 - ✅ Drools规则引擎接入（rule-engine-service，Drools 8.44.0，5个DRL文件25条规则，17个REST API，前端规则管理页面）
 - ✅ CI/CD流水线（.gitlab-ci.yml + Jenkinsfile + Helm Chart + Makefile + DEPLOYMENT.md）
@@ -111,7 +148,7 @@
 - ✅ ClickHouse OLAP接入（analytics-service，53文件，含3个分析表DDL+Repository/Service/Controller完整层）
 - ⏳ 移动端自动化测试（待实现）
 
-### 项目结构（2026-04-11重构，V2.0）
+### 项目结构（2026-04-11重构，V2.1）
 ```
 enterprise-data-system/
 ├── backend/                   # 后端统一目录
@@ -126,13 +163,29 @@ enterprise-data-system/
 ├── tests/                    # 测试统一
 │   ├── integration/          # 集成测试
 │   └── e2e/                 # E2E测试（Playwright）
+├── docs/                     # 📚 文档中心（14个分类，42个文档）
+│   ├── README.md             # 文档中心首页
+│   ├── requirements/         # 需求分析（2）
+│   ├── architecture/        # 架构设计（9）
+│   ├── database/            # 数据库设计（2）
+│   ├── security/            # 安全设计（3）
+│   ├── ai/                  # AI服务（1）
+│   ├── governance/          # 数据治理（3）
+│   ├── testing/             # 测试文档（3）
+│   ├── operations/          # 运维文档（2）
+│   ├── deployment/          # 部署文档（5）
+│   ├── integration/         # 集成方案（2）
+│   ├── api/                # API设计（1）
+│   ├── standards/           # 开发规范（1）
+│   ├── reports/             # 项目报告（4）
+│   └── guides/              # 用户指南（3）
 ├── infrastructure/            # 基础设施
 │   ├── ci-cd/               # CI/CD配置
 │   ├── docker/              # Docker配置
 │   ├── helm/                # Helm Charts
 │   ├── k8s/                 # Kubernetes配置
 │   ├── keycloak/            # Keycloak配置
-│   └── monitoring/          # 监控配置
+│   └── monitoring/           # 监控配置
 ├── charts/                   # Helm Charts
 ├── docker/                   # Docker配置
 ├── scripts/                  # 脚本

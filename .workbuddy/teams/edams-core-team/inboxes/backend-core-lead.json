@@ -1,0 +1,20 @@
+[
+  {
+    "id": "msg-1775913149543-qzamgr",
+    "from": "team-lead",
+    "to": "@team",
+    "type": "broadcast",
+    "content": "EDAMS核心服务重构任务已启动！\n\n**项目背景**：经过深度架构评审，发现edams-parent组大部分服务只有骨架，需要完整实现业务逻辑。\n\n**你的优先级**：\n1. 🔴 **edams-auth** - 认证服务（JWT + Spring Security）\n2. 🔴 **edams-gateway** - API网关（路由 + 过滤器）\n3. 🟡 **edams-user** - 用户服务（用户/部门/角色管理）\n4. 🟡 **edams-permission** - 权限服务（RBAC）\n5. 🟢 **edams-notification** - 通知服务（多渠道）\n6. 🟢 **edams-workflow** - 审批流服务\n\n**技术要求**：\n- 使用Spring Boot 3.2 + Spring Cloud 2023\n- 完整的CRUD + 分页查询\n- 实体类 + DTO + Service + Controller\n- 每个服务独立可运行\n\n**提交规范**：\n- 每个服务完成后单独commit\n- commit message: `feat({service}): 完成{服务名}核心服务实现`\n\n加油！我们相信你能完成任务！💪",
+    "timestamp": "2026-04-11T13:12:29.543Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775915918634-o0voc7",
+    "from": "team-lead",
+    "to": "backend-core-lead",
+    "type": "message",
+    "content": "请汇报你的工作进度：1. 已完成的服务和文件列表 2. 正在进行的工作 3. 遇到的任何问题",
+    "timestamp": "2026-04-11T13:58:38.634Z",
+    "read": true
+  }
+]

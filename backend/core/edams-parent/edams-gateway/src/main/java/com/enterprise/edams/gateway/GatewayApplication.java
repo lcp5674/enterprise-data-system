@@ -3,19 +3,17 @@ package com.enterprise.edams.gateway;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
-import org.springframework.context.annotation.ComponentScan;
-import springfox.documentation.oas.annotations.EnableOpenApi;
 
 /**
- * API网关启动类
+ * EDAMS API网关启动类
  *
- * @author Architecture Team
+ * <p>基于Spring Cloud Gateway实现，提供路由转发、JWT认证、限流、日志等功能</p>
+ *
+ * @author EDAMS Team
  * @version 1.0.0
  */
-@EnableOpenApi
+@SpringBootApplication(scanBasePackages = "com.enterprise.edams")
 @EnableDiscoveryClient
-@SpringBootApplication
-@ComponentScan(basePackages = {"com.enterprise.edams.gateway", "com.enterprise.edams.common"})
 public class GatewayApplication {
 
     public static void main(String[] args) {
