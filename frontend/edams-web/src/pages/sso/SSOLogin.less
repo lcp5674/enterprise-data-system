@@ -1,0 +1,104 @@
+/**
+ * SSO登录页面样式
+ */
+
+.sso-login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+}
+
+.sso-login-card {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+
+  .sso-header {
+    text-align: center;
+    margin-bottom: 24px;
+
+    .sso-icon {
+      font-size: 48px;
+      color: #1890ff;
+      margin-bottom: 16px;
+
+      &.success {
+        color: #52c41a;
+      }
+    }
+
+    h3 {
+      margin-bottom: 8px;
+    }
+  }
+
+  .sso-description {
+    text-align: center;
+    color: rgba(0, 0, 0, 0.45);
+    margin-bottom: 24px;
+  }
+
+  .sso-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 0;
+  }
+
+  .sso-actions {
+    margin-bottom: 24px;
+
+    .sso-login-btn {
+      height: 48px;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+
+    .sso-info {
+      text-align: center;
+      margin-top: 12px;
+    }
+  }
+
+  .sso-alternative {
+    text-align: center;
+  }
+
+  .sso-user-info {
+    background: #fafafa;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .user-info-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .anticon {
+        color: #1890ff;
+      }
+    }
+  }
+
+  .sso-footer {
+    margin-top: 24px;
+    text-align: center;
+  }
+}
+
+// 响应式适配
+@media (max-width: 576px) {
+  .sso-login-container {
+    padding: 16px;
+  }
+
+  .sso-login-card {
+    max-width: 100%;
+  }
+}

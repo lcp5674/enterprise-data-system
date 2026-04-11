@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kmodule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://www.drools.org/drools-5.0/kmodule">
+
+    <kbase name="qualityRules" packages="rules.quality">
+        <ksession name="qualitySession" type="stateless"/>
+    </kbase>
+
+    <kbase name="complianceRules" packages="rules.compliance">
+        <ksession name="complianceSession" type="stateless"/>
+    </kbase>
+
+    <kbase name="valueRules" packages="rules.value">
+        <ksession name="valueSession" type="stateless"/>
+    </kbase>
+
+    <kbase name="lifecycleRules" packages="rules.lifecycle">
+        <ksession name="lifecycleSession" type="stateless"/>
+    </kbase>
+
+    <kbase name="governanceRules" packages="rules.governance">
+        <ksession name="governanceSession" type="stateless"/>
+    </kbase>
+
+</kmodule>

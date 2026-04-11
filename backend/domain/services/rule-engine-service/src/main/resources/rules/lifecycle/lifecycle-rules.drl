@@ -1,0 +1,118 @@
+package rules.lifecycle
+
+import com.enterprise.dataplatform.ruleengine.domain.model.AssetEvaluation
+import java.time.LocalDateTime
+
+// =========================================
+// 数据生命周期管理规则集
+// 基于资产使用情况和时间评估数据生命周期阶段
+// =========================================
+
+rule "Lifecycle - Active Data (活跃数据)"
+    salience 100
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount > 10,
+            lastAccessTime != null
+        )
+        eval($asset.getLastAccessTime().isAfter(LocalDateTime.now().minusDays(30)))
+    then
+        $asset.setLifecyclePhase("ACTIVE");
+        $asset.setEvaluationSummary("数据处于活跃使用期，保持当前状态");
+        $asset.getTriggeredRules().add("Lifecycle-Active");
+        update($asset);
+end
+
+rule "Lifecycle - Cold Data (冷数据 - 建议归档)"
+    salience 90
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount <= 5,
+            dailyAccessCount > 0,
+            lastAccessTime != null
+        )
+        eval($asset.getLastAccessTime().isBefore(LocalDateTime.now().minusDays(90)))
+    then
+        $asset.setLifecyclePhase("COLD");
+        $asset.setEvaluationSummary("数据已进入冷数据期（90天+未活跃访问），建议归档");
+        $asset.getTriggeredRules().add("Lifecycle-Cold");
+        $asset.getEvaluationTags().add("冷数据");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("LIFECYCLE_MANAGE");
+        $asset.setGovernancePriority("LOW");
+        update($asset);
+end
+
+rule "Lifecycle - Frozen Data (冻结数据 - 建议冻结)"
+    salience 80
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount <= 1,
+            lastAccessTime != null
+        )
+        eval($asset.getLastAccessTime().isBefore(LocalDateTime.now().minusDays(180)))
+    then
+        $asset.setLifecyclePhase("FROZEN");
+        $asset.setEvaluationSummary("数据已超过半年未活跃访问，建议冻结");
+        $asset.getTriggeredRules().add("Lifecycle-Frozen");
+        $asset.getEvaluationTags().add("冻结候选");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("LIFECYCLE_MANAGE");
+        $asset.setGovernancePriority("MEDIUM");
+        update($asset);
+end
+
+rule "Lifecycle - Retire Candidate (退役候选)"
+    salience 70
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount == 0,
+            lastAccessTime != null
+        )
+        eval($asset.getLastAccessTime().isBefore(LocalDateTime.now().minusDays(365)))
+    then
+        $asset.setLifecyclePhase("RETIRED");
+        $asset.setEvaluationSummary("数据已超过一年完全未使用，建议退役下线");
+        $asset.getTriggeredRules().add("Lifecycle-Retire");
+        $asset.getEvaluationTags().add("退役候选");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("LIFECYCLE_MANAGE");
+        $asset.setGovernancePriority("HIGH");
+        update($asset);
+end
+
+rule "Lifecycle - Sensitive Data Requires Review"
+    salience 85
+    when
+        $asset : AssetEvaluation(
+            (sensitivityLevel == "HIGH" || sensitivityLevel == "CRITICAL"),
+            lastAccessTime != null
+        )
+        eval($asset.getLastAccessTime().isBefore(LocalDateTime.now().minusDays(60)))
+    then
+        $asset.getEvaluationTags().add("敏感数据需审查");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("SENSITIVITY_REVIEW");
+        $asset.setGovernancePriority("HIGH");
+        $asset.getTriggeredRules().add("Lifecycle-SensitiveReview");
+        update($asset);
+end
+
+rule "Lifecycle - Never Accessed"
+    salience 65
+    when
+        $asset : AssetEvaluation(
+            lastAccessTime == null,
+            createTime != null
+        )
+        eval($asset.getCreateTime().isBefore(LocalDateTime.now().minusDays(180)))
+    then
+        $asset.setLifecyclePhase("RETIRED");
+        $asset.setEvaluationSummary("数据自创建以来从未被访问，建议评估是否退役");
+        $asset.getTriggeredRules().add("Lifecycle-NeverAccessed");
+        $asset.getEvaluationTags().add("从未访问");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("LIFECYCLE_MANAGE");
+        $asset.setGovernancePriority("MEDIUM");
+        update($asset);
+end

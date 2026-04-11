@@ -1,0 +1,57 @@
+# =====================================================
+# EDAMS Services Dockerfile 模板
+# 适用于services目录下的独立微服务
+# =====================================================
+
+FROM maven:3.9.4-eclipse-temurin-17 AS builder
+
+WORKDIR /build
+ARG BUILD_PROFILE=prod
+ARG SERVICE_NAME
+
+# 使用阿里云镜像 (可选)
+COPY settings.xml /usr/share/maven/conf/settings.xml 2>/dev/null || true
+
+COPY pom.xml .
+COPY ${SERVICE_NAME}/pom.xml ${SERVICE_NAME}/
+
+# 依赖缓存
+RUN mvn dependency:go-offline -B -DskipTests || true
+
+COPY . .
+
+RUN mvn clean package -DskipTests -B -P${BUILD_PROFILE} \
+    -pl ${SERVICE_NAME} -am \
+    -Denforcer.skip=true -Dcheckstyle.skip=true -Dspotbugs.skip=true \
+    -Dpmd.skip=true -Djacoco.skip=true -Dmaven.javadoc.skip=true
+
+FROM eclipse-temurin:17-jre-alpine AS runtime
+
+RUN apk add --no-cache tini curl ca-certificates tzdata && update-ca-certificates && rm -rf /var/cache/apk/*
+
+ENV TZ=Asia/Shanghai
+
+RUN addgroup -S edams -g 1000 && \
+    adduser -S edams -u 1000 -G edams -h /home/edams -s /bin/sh && \
+    mkdir -p /app && chown -R edams:edams /app
+
+WORKDIR /app
+USER edams
+
+COPY --from=builder --chown=edams:edams /build/${SERVICE_NAME}/target/*.jar app.jar
+
+RUN mkdir -p /app/logs /app/tmp && chmod 755 /app/logs /app/tmp
+
+ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -Djava.security.egd=file:/dev/./urandom"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+EXPOSE 8080
+
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+LABEL maintainer="devops@enterprise.com"
+LABEL service="${SERVICE_NAME}"
+LABEL version="1.0.0"

@@ -1,0 +1,33 @@
+{
+  "name": "edams-p1-fix-team",
+  "leadAgentId": "1e1f5472c3d24ae388d35696d044850a",
+  "workspacePath": "e:/GitCode/enterprise-data-system",
+  "createdAt": "2026-04-11T02:32:34.851Z",
+  "options": {
+    "workspacePath": "e:/GitCode/enterprise-data-system",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@edams-p1-fix-team",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "backend-fix-agent@edams-p1-fix-team",
+      "name": "backend-fix-agent",
+      "role": "修复lifecycle和collaboration服务层"
+    },
+    {
+      "memberId": "frontend-page-agent@edams-p1-fix-team",
+      "name": "frontend-page-agent",
+      "role": "创建前端5个缺失页面"
+    },
+    {
+      "memberId": "test-fix-agent@edams-p1-fix-team",
+      "name": "test-fix-agent",
+      "role": "补全6个服务单元测试"
+    }
+  ],
+  "isAutoTeam": false
+}

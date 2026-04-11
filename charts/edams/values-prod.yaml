@@ -1,0 +1,342 @@
+# =====================================================
+# EDAMS Helm Values - 生产环境
+# =====================================================
+
+# 全局配置
+global:
+  imageRegistry: registry.example.com
+  imagePullSecrets:
+    - name: registry-secret
+  storageClass: ssd
+
+# 命名空间
+namespace: edams-prod
+
+# 副本数配置
+replicaCount: 3
+
+# 镜像配置
+image:
+  repository: edams
+  pullPolicy: Always
+  tag: "v1.0.0"
+
+# 前端镜像
+frontend:
+  enabled: true
+  image:
+    repository: edams-frontend
+    tag: "v1.0.0"
+  replicaCount: 3
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+# 后端服务配置
+services:
+  gateway:
+    enabled: true
+    replicaCount: 5
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+
+  auth:
+    enabled: true
+    replicaCount: 3
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  user:
+    enabled: true
+    replicaCount: 3
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 1000m
+        memory: 1Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+
+  permission:
+    enabled: true
+    replicaCount: 3
+
+  notification:
+    enabled: true
+    replicaCount: 3
+
+  knowledge:
+    enabled: true
+    replicaCount: 3
+
+  llm:
+    enabled: true
+    replicaCount: 3
+
+  chatbot:
+    enabled: true
+    replicaCount: 3
+
+  workflow:
+    enabled: true
+    replicaCount: 3
+
+  lifecycle:
+    enabled: true
+    replicaCount: 3
+
+  version:
+    enabled: true
+    replicaCount: 2
+
+  collaboration:
+    enabled: true
+    replicaCount: 3
+
+  aiops:
+    enabled: true
+    replicaCount: 3
+
+  asset:
+    enabled: true
+    replicaCount: 3
+
+  lineage:
+    enabled: true
+    replicaCount: 3
+
+  quality:
+    enabled: true
+    replicaCount: 3
+
+  standard:
+    enabled: true
+    replicaCount: 3
+
+  governance:
+    enabled: true
+    replicaCount: 3
+
+  portal:
+    enabled: true
+    replicaCount: 3
+
+  admin:
+    enabled: true
+    replicaCount: 2
+
+  metadata:
+    enabled: true
+    replicaCount: 3
+
+  index:
+    enabled: true
+    replicaCount: 3
+
+# 基础设施配置 - 生产环境使用高可用配置
+infrastructure:
+  mysql:
+    enabled: true
+    architecture: replication
+    auth:
+      database: edams
+      username: edams
+      password: ${MYSQL_PASSWORD}
+    primary:
+      persistence:
+        enabled: true
+        size: 50Gi
+        storageClass: ssd
+    secondary:
+      replicaCount: 2
+      persistence:
+        enabled: true
+        size: 50Gi
+        storageClass: ssd
+
+  redis:
+    enabled: true
+    architecture: replication
+    auth:
+      password: ${REDIS_PASSWORD}
+    master:
+      persistence:
+        enabled: true
+        size: 5Gi
+        storageClass: ssd
+    replica:
+      replicaCount: 2
+      persistence:
+        enabled: true
+        size: 5Gi
+        storageClass: ssd
+
+  kafka:
+    enabled: true
+    replicaCount: 3
+    kraft:
+      enabled: true
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ssd
+
+  elasticsearch:
+    enabled: true
+    master:
+      replicas: 3
+    data:
+      replicas: 3
+    coordinating:
+      replicas: 2
+    ingest:
+      replicas: 2
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ssd
+
+  neo4j:
+    enabled: true
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ssd
+
+# Ingress配置
+ingress:
+  enabled: true
+  className: nginx
+  hostname: edams.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: true
+    secretName: edams-prod-tls-secret
+
+# 监控配置
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    retention: 30d
+  grafana:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: standard
+  jaeger:
+    enabled: true
+
+# 日志配置
+logging:
+  enabled: true
+  elasticsearch:
+    enabled: true
+    host: elasticsearch
+    port: 9200
+    indexPrefix: edams-prod
+
+# 安全配置
+security:
+  enabled: true
+  rbac:
+    enabled: true
+  networkPolicies:
+    enabled: true
+
+# 限流配置
+rateLimit:
+  enabled: true
+  defaultLimit: 5000
+  burstLimit: 10000
+
+# Pod调度配置 - 生产环境使用更严格的调度策略
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - edams-gateway
+                - edams-auth
+        topologyKey: kubernetes.io/hostname
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: tier
+                operator: In
+                values:
+                  - database
+          topologyKey: topology.kubernetes.io/zone
+
+tolerations: []
+
+nodeSelector:
+  node-type: application
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# 备份配置
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: 30d
+  mysql:
+    enabled: true
+    schedule: "0 3 * * *"
+  elasticsearch:
+    enabled: true
+    schedule: "0 4 * * *"

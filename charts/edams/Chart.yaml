@@ -1,0 +1,28 @@
+# =====================================================
+# EDAMS Helm Chart
+# 企业数据资产管理系统 Kubernetes部署
+# =====================================================
+
+apiVersion: v2
+name: edams
+description: Enterprise Data Asset Management System Helm Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - edams
+  - data-asset
+  - management
+  - spring-cloud
+  - microservices
+home: https://github.com/enterprise/edams
+sources:
+  - https://github.com/enterprise/edams
+maintainers:
+  - name: DevOps Team
+    email: devops@enterprise.com
+
+dependencies:
+  - name: common
+    version: "1.x.x"
+    repository: "https://charts.bitnami.com/bitnami"

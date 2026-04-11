@@ -1,0 +1,246 @@
+.container {
+  padding: 24px;
+}
+
+.mainCard {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 历史会话区域 */
+.historySection {
+  :global {
+    .ant-collapse-content-box {
+      padding: 0;
+    }
+  }
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  
+  :global {
+    .ant-badge {
+      margin-left: 8px;
+    }
+  }
+}
+
+.conversationList {
+  padding: 8px 0;
+}
+
+.newChatBtn {
+  margin-bottom: 8px;
+}
+
+.conversationItem {
+  cursor: pointer;
+  border-radius: 8px;
+  margin: 4px 0;
+  padding: 12px !important;
+  transition: all 0.3s;
+  
+  &:hover {
+    background-color: #f5f5f5;
+  }
+  
+  &.active {
+    background-color: #e6f7ff;
+    border: 1px solid #91d5ff;
+  }
+  
+  :global {
+    .ant-list-item-meta-title {
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    
+    .ant-list-item-action {
+      display: none;
+    }
+    
+    &:hover .ant-list-item-action {
+      display: flex;
+    }
+  }
+}
+
+.conversationDesc {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lastMessage {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.lastTime {
+  color: rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+}
+
+/* 分隔线 */
+.divider {
+  margin: 16px 0;
+}
+
+/* 聊天区域 */
+.chatSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.messagesContainer {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background-color: #fafafa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.messagesList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.messageWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  
+  &.userMessage {
+    align-items: flex-end;
+  }
+  
+  &.assistantMessage {
+    align-items: flex-start;
+  }
+}
+
+.messageContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 80%;
+  
+  .userMessage & {
+    flex-direction: row-reverse;
+  }
+}
+
+.messageAvatar {
+  flex-shrink: 0;
+}
+
+.messageBubble {
+  padding: 12px 16px;
+  border-radius: 12px;
+  word-break: break-word;
+  
+  &.userBubble {
+    background-color: #1890ff;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  
+  &.assistantBubble {
+    background-color: #fff;
+    border: 1px solid #e8e8e8;
+    border-bottom-left-radius: 4px;
+  }
+}
+
+.markdownContent {
+  line-height: 1.6;
+  
+  p {
+    margin: 0 0 8px 0;
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  ul, ol {
+    margin: 0;
+    padding-left: 20px;
+  }
+  
+  li {
+    margin: 4px 0;
+  }
+  
+  code {
+    background-color: rgba(0, 0, 0, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+  
+  pre {
+    background-color: #f6f8fa;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    
+    code {
+      background-color: transparent;
+      padding: 0;
+    }
+  }
+}
+
+.messageTime {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.35);
+  margin-top: 4px;
+  
+  .userMessage & {
+    text-align: right;
+  }
+}
+
+/* 输入区域 */
+.inputSection {
+  border-top: 1px solid #e8e8e8;
+  padding-top: 16px;
+}
+
+.inputWrapper {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.input {
+  flex: 1;
+  resize: none;
+}
+
+.sendBtn {
+  height: auto;
+  min-height: 56px;
+}
+
+.inputHint {
+  margin-top: 8px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "msg-1775872649055-vnkpck",
+    "from": "test-dev",
+    "to": "team-lead",
+    "type": "message",
+    "content": "【测试和配置完成】\n\n## 任务1：SkyWalking Agent配置 ✅\n\n已创建5个服务的SkyWalking Agent配置文件：\n1. microservices/edams-parent/edams-auth/src/main/resources/skywalking-agent.config\n2. microservices/edams-parent/edams-workflow/src/main/resources/skywalking-agent.config\n3. services/lineage-service/src/main/resources/skywalking-agent.config\n4. services/quality-service/src/main/resources/skywalking-agent.config\n5. services/governance-engine/src/main/resources/skywalking-agent.config\n\n## 任务2：单元测试 ✅\n\n已确认以下测试文件存在且完整：\n\n1. **edams-user** - UserServiceTest.java\n   - 测试：createUser、getUserById、updateUser、deleteUser、pageUsers分页\n   - 10个测试用例，包含异常路径测试\n\n2. **edams-knowledge** - KnowledgeServiceTest.java\n   - 测试：createGraph、updateGraph、deleteGraph、getGraphDetail、listGraphs、activateGraph、archiveGraph、getGraphStatistics\n   - 11个测试用例\n\n3. **edams-llm** - LlmServiceTest.java\n   - 测试：chat、chatStream、batchChat、getAvailableModels、getProviders、selectModel\n   - 9个测试用例\n\n4. **sla-service** - SlaServiceTest.java\n   - 测试：createSla、updateSla、deleteSla、getSlaById、searchSlas、enableSla、disableSla、getSlaStatistics、getSlaCompliance\n   - 11个测试用例，包含达标/不达标测试\n\n5. **sandbox-service** - SandboxServiceTest.java\n   - 测试：createSandbox、getInstance、searchInstances、startInstance、stopInstance、deleteInstance、requestSampleData等\n   - 14个测试用例\n\n6. **watermark-service** - WatermarkServiceTest.java\n   - 测试：addWatermark、batchAddWatermark、getRecord、searchRecords、createTemplate、updateTemplate、traceLeakage等\n   - 13个测试用例\n\n所有测试均使用：\n- @ExtendWith(MockitoExtension.class)\n- @Mock 和 @InjectMocks 注解\n- assertThrows 进行异常路径测试\n- 完整可运行的测试代码",
+    "timestamp": "2026-04-11T01:57:29.055Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775872761529-kp73dl",
+    "from": "frontend-dev",
+    "to": "team-lead",
+    "type": "message",
+    "content": "【前端完成】\n\n已按任务要求完成所有前端页面和services层文件的创建。\n\n## 📄 创建的文件清单\n\n### 前端页面（4个）\n1. **SLA监控页面**\n   - 路径: `edams-web/src/pages/sla/index.tsx`\n   - 路径: `edams-web/src/pages/sla/index.less`\n   - 功能: 统计卡片（SLA达标率、平均响应时间、违规告警数、总协议数）+ 主表格 + 详情/编辑弹窗\n\n2. **数据标准管理页面**\n   - 路径: `edams-web/src/pages/standard/index.tsx`\n   - 路径: `edams-web/src/pages/standard/index.less`\n   - 功能: 左侧分类树 + 右侧标准列表表格 + 新增/编辑/发布/删除操作\n\n3. **数据沙箱页面**\n   - 路径: `edams-web/src/pages/sandbox/index.tsx`\n   - 路径: `edams-web/src/pages/sandbox/index.less`\n   - 功能: 沙箱表格（状态切换）+ 创建弹窗 + 底部统计（总数量/运行中）\n\n4. **AI智能助手页面**\n   - 路径: `edams-web/src/pages/chatbot/index.tsx`\n   - 路径: `edams-web/src/pages/chatbot/index.less`\n   - 功能: 历史会话列表（可折叠）+ Markdown渲染聊天气泡 + 消息输入发送\n\n### Services层文件（6个）\n1. **standard.ts** - 数据标准服务\n2. **knowledge.ts** - 知识图谱服务\n3. **governance.ts** - 数据治理服务\n4. **chatbot.ts** - AI聊天机器人服务\n5. **metadata.ts** - 元数据服务\n6. **sla.ts** - SLA服务\n\n所有代码遵循项目风格（React + TypeScript + AntDesign + UmiJS），参考了Quality/Rules.tsx的实现方式。",
+    "timestamp": "2026-04-11T01:59:21.529Z",
+    "read": true
+  },
+  {
+    "id": "msg-1775872778503-69as2h",
+    "from": "team-lead",
+    "to": "team-lead",
+    "type": "message",
+    "content": "【团队A完成】API Gateway和edams-asset修复完毕\n\n## 创建的文件清单\n\n### edams-gateway 服务（6个文件）\n1. `edams-gateway/pom.xml` - Maven模块配置，依赖Spring Cloud Gateway、Nacos、Redis限流、JWT\n2. `edams-gateway/src/main/java/com/enterprise/edams/gateway/GatewayApplication.java` - 启动类\n3. `edams-gateway/src/main/resources/application.yml` - 配置，包含14个服务的路由规则\n4. `edams-gateway/src/main/java/com/enterprise/edams/gateway/filter/GlobalAuthFilter.java` - JWT鉴权过滤器\n5. `edams-gateway/src/main/java/com/enterprise/edams/gateway/config/RateLimitConfig.java` - Redis限流配置\n6. `edams-gateway/src/main/java/com/enterprise/edams/gateway/handler/GatewayExceptionHandler.java` - 全局异常处理器\n\n### edams-asset 服务（11个文件）\n1. `edams-asset/pom.xml` - Maven模块配置，依赖Web、Feign、MyBatis-Plus、PostgreSQL、Redis、Kafka、Sentinel\n2. `edams-asset/src/main/java/com/enterprise/edams/asset/AssetApplication.java` - 启动类\n3. `edams-asset/src/main/resources/application.yml` - 配置，包含数据库、Redis、Kafka、Feign等\n4. `edams-asset/src/main/java/com/enterprise/edams/asset/entity/DataAsset.java` - 数据资产实体类\n5. `edams-asset/src/main/java/com/enterprise/edams/asset/dto/AssetCreateRequest.java` - 创建请求DTO\n6. `edams-asset/src/main/java/com/enterprise/edams/asset/dto/AssetDTO.java` - 响应DTO（含聚合信息）\n7. `edams-asset/src/main/java/com/enterprise/edams/asset/repository/AssetRepository.java` - MyBatis-Plus Mapper\n8. `edams-asset/src/main/java/com/enterprise/edams/asset/service/AssetService.java` - 服务接口\n9. `edams-asset/src/main/java/com/enterprise/edams/asset/service/impl/AssetServiceImpl.java` - 服务实现（含Feign聚合、异步调用、Kafka事件）\n10. `edams-asset/src/main/java/com/enterprise/edams/asset/controller/AssetController.java` - REST API控制器\n11. `edams-asset/src/test/java/com/enterprise/edams/asset/service/AssetServiceTest.java` - 单元测试\n\n## 关键特性\n- Gateway：JWT鉴权、白名单、14个服务路由、Redis限流、统一异常处理\n- Asset：完整CRUD、Feign聚合质量/血缘/工作流、@Async异步调用、Kafka事件发布、单元测试",
+    "timestamp": "2026-04-11T01:59:38.503Z",
+    "read": true
+  }
+]

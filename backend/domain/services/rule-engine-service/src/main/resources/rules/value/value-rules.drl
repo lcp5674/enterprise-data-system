@@ -1,0 +1,111 @@
+package rules.value
+
+import com.enterprise.dataplatform.ruleengine.domain.model.AssetEvaluation
+
+// =========================================
+// 数据价值评估规则集
+// 基于使用率、业务重要度、质量等维度评估数据资产价值
+// =========================================
+
+rule "Value - High Frequency Access"
+    salience 100
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount > 100
+        )
+    then
+        $asset.getEvaluationTags().add("高频访问");
+        $asset.getTriggeredRules().add("Value-HighFrequencyAccess");
+        update($asset);
+end
+
+rule "Value - High Value Asset"
+    salience 90
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount > 50,
+            qualityScore > 80,
+            completeness > 0.85
+        )
+    then
+        $asset.setValueScore(92);
+        $asset.setEvaluationSummary("高价值数据资产：使用频繁且质量优良");
+        $asset.getTriggeredRules().add("Value-HighValue");
+        $asset.getEvaluationTags().add("高价值资产");
+        update($asset);
+end
+
+rule "Value - Medium Value Asset"
+    salience 80
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount > 10,
+            qualityScore > 60
+        )
+    then
+        $asset.setValueScore(65);
+        $asset.setEvaluationSummary("中等价值数据资产：有稳定使用场景");
+        $asset.getTriggeredRules().add("Value-MediumValue");
+        $asset.getEvaluationTags().add("中等价值");
+        update($asset);
+end
+
+rule "Value - Low Value Asset"
+    salience 70
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount <= 10,
+            dailyAccessCount > 1,
+            qualityScore <= 60
+        )
+    then
+        $asset.setValueScore(35);
+        $asset.setEvaluationSummary("低价值数据资产：使用率低且质量不佳");
+        $asset.getTriggeredRules().add("Value-LowValue");
+        $asset.getEvaluationTags().add("低价值资产");
+        update($asset);
+end
+
+rule "Value - No Value / Candidate for Archive"
+    salience 60
+    when
+        $asset : AssetEvaluation(
+            dailyAccessCount <= 1
+        )
+    then
+        $asset.setValueScore(10);
+        $asset.setEvaluationSummary("数据资产几乎无使用，建议考虑归档或下线");
+        $asset.getTriggeredRules().add("Value-NoValue");
+        $asset.getEvaluationTags().add("归档候选");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("LIFECYCLE_MANAGE");
+        $asset.setGovernancePriority("LOW");
+        update($asset);
+end
+
+rule "Value - Sensitive Data Premium"
+    salience 85
+    when
+        $asset : AssetEvaluation(
+            sensitivityLevel == "HIGH" || sensitivityLevel == "CRITICAL"
+        )
+    then
+        // 敏感数据需要保护，有合规价值
+        $asset.setValueScore($asset.getValueScore() + 10);
+        $asset.getTriggeredRules().add("Value-SensitivePremium");
+        update($asset);
+end
+
+rule "Value - Large Dataset Value"
+    salience 75
+    when
+        $asset : AssetEvaluation(
+            dataSizeMb > 1000
+        )
+    then
+        // 大数据集有存储成本但也有分析价值
+        $asset.setValueScore($asset.getValueScore() + 5);
+        $asset.getTriggeredRules().add("Value-LargeDataset");
+        $asset.getEvaluationTags().add("大数据集");
+        update($asset);
+end

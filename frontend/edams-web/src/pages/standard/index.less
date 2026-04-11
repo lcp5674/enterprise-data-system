@@ -1,0 +1,41 @@
+.container {
+  padding: 24px;
+}
+
+.mainCard {
+  min-height: calc(100vh - 180px);
+}
+
+.layout {
+  display: flex;
+  gap: 24px;
+}
+
+.leftPanel {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.treeCard {
+  height: 100%;
+  
+  :global {
+    .ant-card-body {
+      padding: 16px;
+    }
+    
+    .ant-tree {
+      background: transparent;
+    }
+  }
+}
+
+.rightPanel {
+  flex: 1;
+}
+
+.toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+}

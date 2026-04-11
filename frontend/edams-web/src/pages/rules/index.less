@@ -1,0 +1,65 @@
+.container {
+  padding: 24px;
+}
+
+.mainCard {
+  min-height: calc(100vh - 280px);
+}
+
+.toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.testCard {
+  min-height: calc(100vh - 280px);
+}
+
+.testResult {
+  .resultSection {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #fafafa;
+    border-radius: 8px;
+    border: 1px solid #f0f0f0;
+
+    h4 {
+      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #333;
+    }
+  }
+}
+
+.emptyResult {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.statCard {
+  text-align: center;
+
+  :global {
+    .ant-statistic-title {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .ant-statistic-content-value {
+      font-size: 28px;
+    }
+  }
+}
+
+.categoryStat {
+  text-align: center;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+}

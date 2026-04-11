@@ -1,0 +1,35 @@
+.container {
+  padding: 24px;
+}
+
+.mainCard {
+  min-height: calc(100vh - 180px);
+}
+
+.toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.statsSection {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.statCard {
+  text-align: center;
+  
+  :global {
+    .ant-statistic-title {
+      font-size: 14px;
+      color: rgba(0, 0, 0, 0.65);
+    }
+    
+    .ant-statistic-content {
+      font-size: 32px;
+      font-weight: 600;
+    }
+  }
+}

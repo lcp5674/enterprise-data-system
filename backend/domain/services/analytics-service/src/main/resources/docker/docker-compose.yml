@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: edams-clickhouse
+    hostname: clickhouse
+    ports:
+      - "8123:8123"    # HTTP interface
+      - "9000:9000"    # Native client interface
+    environment:
+      CLICKHOUSE_DB: edams_analytics
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - ./clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse-logs:/var/log/clickhouse-server
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: ClickHouse Keeper for distributed setup
+  zookeeper:
+    image: zookeeper:3.8
+    container_name: edams-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_PORT: 2888
+      ZOOKEEPER_ELECTION_PORT: 3888

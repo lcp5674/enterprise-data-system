@@ -1,0 +1,125 @@
+server:
+  port: 8089
+  servlet:
+    context-path: /analytics-service
+
+spring:
+  application:
+    name: analytics-service
+
+  # ClickHouse DataSource Configuration
+  datasource:
+    url: jdbc:clickhouse://${CLICKHOUSE_HOST:localhost}:${CLICKHOUSE_PORT:8123}/${CLICKHOUSE_DB:default}?compress=1&socket_timeout=30000&connection_timeout=10000
+    username: ${CLICKHOUSE_USER:default}
+    password: ${CLICKHOUSE_PASSWORD:}
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+
+  # ClickHouse settings (custom properties)
+  clickhouse:
+    host: ${CLICKHOUSE_HOST:localhost}
+    port: ${CLICKHOUSE_PORT:8123}
+    database: ${CLICKHOUSE_DB:edams_analytics}
+    username: ${CLICKHOUSE_USER:default}
+    password: ${CLICKHOUSE_PASSWORD:}
+    connection-timeout: 10000
+    socket-timeout: 30000
+    max-connections: 50
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+      timeout: 5000
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: analytics-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual
+
+spring.cloud:
+  nacos:
+    discovery:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      namespace: ${NACOS_NAMESPACE:public}
+    config:
+      server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+      namespace: ${NACOS_NAMESPACE:public}
+  sentinel:
+    eager: true
+    transport:
+      dashboard: ${SENTINEL_DASHBOARD:localhost:8080}
+
+# Analytics specific configuration
+analytics:
+  # Asset analytics settings
+  asset:
+    heatmap:
+      top-n: 100
+      time-range-days: 30
+    trending:
+      update-interval-seconds: 300
+      min-access-count: 10
+
+  # Quality trend settings
+  quality:
+    trend:
+      aggregation-interval-minutes: 60
+      retention-days: 90
+
+  # User behavior settings
+  behavior:
+    session-timeout-minutes: 30
+    max-events-per-session: 1000
+    analysis-window-days: 7
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  health:
+    clickhouse:
+      enabled: true
+    redis:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.enterprise.dataplatform.analytics: DEBUG
+    com.clickhouse: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# SkyWalking Agent配置（通过JVM参数启动）
+# -javaagent:/opt/skywalking-agent/skywalking-agent.jar
+# -Dskywalking.agent.service_name=analytics-service
+# -Dskywalking.collector.backend_service=skywalking-oap:11800
+# -Dskywalking.agent.namespace=edams

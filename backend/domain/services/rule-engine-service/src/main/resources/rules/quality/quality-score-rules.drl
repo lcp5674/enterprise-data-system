@@ -1,0 +1,122 @@
+package rules.quality
+
+import com.enterprise.dataplatform.ruleengine.domain.model.AssetEvaluation
+
+// =========================================
+// 质量评分规则集
+// 基于多维数据质量维度评估资产质量得分
+// =========================================
+
+rule "Quality Score - Excellent (优秀)"
+    salience 100
+    when
+        $asset : AssetEvaluation(
+            qualityIssues == 0,
+            completeness > 0.95,
+            accuracy > 0.95,
+            consistency > 0.95,
+            timeliness > 0.90,
+            uniqueness > 0.95
+        )
+    then
+        $asset.setQualityScore(98);
+        $asset.setEvaluationSummary("数据质量优秀，所有维度均达到高标准");
+        $asset.getTriggeredRules().add("Quality-Excellent");
+        $asset.getEvaluationTags().add("高质量数据");
+        update($asset);
+end
+
+rule "Quality Score - Very Good (良好)"
+    salience 90
+    when
+        $asset : AssetEvaluation(
+            qualityIssues <= 1,
+            completeness > 0.90,
+            accuracy > 0.90,
+            getOverallQualityDimension() > 0.90
+        )
+    then
+        $asset.setQualityScore(88);
+        $asset.setEvaluationSummary("数据质量良好，极少量问题需关注");
+        $asset.getTriggeredRules().add("Quality-VeryGood");
+        $asset.getEvaluationTags().add("良好数据");
+        update($asset);
+end
+
+rule "Quality Score - Good (合格)"
+    salience 80
+    when
+        $asset : AssetEvaluation(
+            qualityIssues <= 3,
+            completeness > 0.80,
+            getOverallQualityDimension() > 0.80
+        )
+    then
+        $asset.setQualityScore(75);
+        $asset.setEvaluationSummary("数据质量合格，存在少量问题需修复");
+        $asset.getTriggeredRules().add("Quality-Good");
+        $asset.getEvaluationTags().add("需关注");
+        update($asset);
+end
+
+rule "Quality Score - Needs Improvement (待改进)"
+    salience 70
+    when
+        $asset : AssetEvaluation(
+            qualityIssues <= 10,
+            completeness > 0.60,
+            getOverallQualityDimension() > 0.60
+        )
+    then
+        $asset.setQualityScore(55);
+        $asset.setEvaluationSummary("数据质量待改进，建议进行数据清洗");
+        $asset.getTriggeredRules().add("Quality-NeedsImprovement");
+        $asset.getEvaluationTags().add("待改进");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("QUALITY_FIX");
+        $asset.setGovernancePriority("MEDIUM");
+        update($asset);
+end
+
+rule "Quality Score - Poor (差)"
+    salience 60
+    when
+        $asset : AssetEvaluation(
+            qualityIssues > 10 || completeness < 0.60
+        )
+    then
+        $asset.setQualityScore(30);
+        $asset.setEvaluationSummary("数据质量差，需要立即进行数据治理");
+        $asset.getTriggeredRules().add("Quality-Poor");
+        $asset.getEvaluationTags().add("数据质量差");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("QUALITY_FIX");
+        $asset.setGovernancePriority("HIGH");
+        update($asset);
+end
+
+rule "Quality Issue - High Completeness but Low Accuracy"
+    salience 50
+    when
+        $asset : AssetEvaluation(
+            completeness > 0.90,
+            accuracy < 0.70
+        )
+    then
+        $asset.getComplianceDetails().put("accuracy_warning", "数据完整但准确度低，可能存在脏数据");
+        $asset.getTriggeredRules().add("Quality-CompletenessAccuracyMismatch");
+        update($asset);
+end
+
+rule "Quality Issue - Timeliness Warning"
+    salience 50
+    when
+        $asset : AssetEvaluation(
+            timeliness < 0.70
+        )
+    then
+        $asset.getComplianceDetails().put("timeliness_warning", "数据时效性不足，可能已过时");
+        $asset.getTriggeredRules().add("Quality-TimelinessWarning");
+        $asset.getEvaluationTags().add("时效性低");
+        update($asset);
+end

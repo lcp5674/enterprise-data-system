@@ -1,0 +1,117 @@
+package rules.compliance
+
+import com.enterprise.dataplatform.ruleengine.domain.model.AssetEvaluation
+
+// =========================================
+// 数据标准合规检查规则集
+// 验证数据资产是否满足命名规范、类型标准、格式要求等
+// =========================================
+
+rule "Compliance - Naming Convention Check"
+    salience 100
+    when
+        $asset : AssetEvaluation(
+            assetName != null,
+            standardCode != null && standardCode.length() > 0
+        )
+        eval($asset.getAssetName().length() < 2 || $asset.getAssetName().contains(" "))
+    then
+        $asset.getComplianceDetails().put("naming", "命名不规范：名称过短或包含空格");
+        $asset.setComplianceStatus("NON_COMPLIANT");
+        $asset.setStandardCompliant(false);
+        $asset.getTriggeredRules().add("Compliance-NamingConvention");
+        update($asset);
+end
+
+rule "Compliance - Naming Convention Pass"
+    salience 90
+    when
+        $asset : AssetEvaluation(
+            assetName != null,
+            standardCode != null && standardCode.length() > 0,
+            assetName.length() >= 2,
+            !assetName.contains(" ")
+        )
+    then
+        $asset.getComplianceDetails().put("naming", "PASS");
+        $asset.setStandardCompliant(true);
+        $asset.getTriggeredRules().add("Compliance-NamingConvention-Pass");
+        update($asset);
+end
+
+rule "Compliance - Data Type Standard Check"
+    salience 80
+    when
+        $asset : AssetEvaluation(
+            assetType == null || assetType.length() == 0
+        )
+    then
+        $asset.getComplianceDetails().put("data_type", "数据类型未定义，不符合标准");
+        $asset.setComplianceStatus("NON_COMPLIANT");
+        $asset.getTriggeredRules().add("Compliance-DataTypeMissing");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("COMPLIANCE_FIX");
+        $asset.setGovernancePriority("HIGH");
+        update($asset);
+end
+
+rule "Compliance - Sensitivity Level Required"
+    salience 75
+    when
+        $asset : AssetEvaluation(
+            sensitivityLevel == null || sensitivityLevel.length() == 0
+        )
+    then
+        $asset.getComplianceDetails().put("sensitivity", "未设置敏感级别");
+        $asset.getTriggeredRules().add("Compliance-SensitivityMissing");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("SENSITIVITY_REVIEW");
+        $asset.setGovernancePriority("MEDIUM");
+        update($asset);
+end
+
+rule "Compliance - Owner Required"
+    salience 70
+    when
+        $asset : AssetEvaluation(
+            owner == null || owner.length() == 0
+        )
+    then
+        $asset.getComplianceDetails().put("owner", "未设置资产负责人");
+        $asset.getTriggeredRules().add("Compliance-OwnerMissing");
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("ACCESS_REVIEW");
+        $asset.setGovernancePriority("MEDIUM");
+        update($asset);
+end
+
+rule "Compliance - Business Domain Required"
+    salience 65
+    when
+        $asset : AssetEvaluation(
+            businessDomain == null || businessDomain.length() == 0
+        )
+    then
+        $asset.getComplianceDetails().put("business_domain", "未归属业务域");
+        $asset.getTriggeredRules().add("Compliance-BusinessDomainMissing");
+        $asset.setNeedsGovernanceAction(true);
+        update($asset);
+end
+
+rule "Compliance - Fully Compliant"
+    salience 40
+    when
+        $asset : AssetEvaluation(
+            assetName != null && assetName.length() >= 2 && !assetName.contains(" "),
+            assetType != null && assetType.length() > 0,
+            sensitivityLevel != null && sensitivityLevel.length() > 0,
+            owner != null && owner.length() > 0,
+            businessDomain != null && businessDomain.length() > 0,
+            complianceStatus != "NON_COMPLIANT"
+        )
+    then
+        $asset.setComplianceStatus("COMPLIANT");
+        $asset.setEvaluationSummary("数据资产完全符合标准规范");
+        $asset.getTriggeredRules().add("Compliance-FullyCompliant");
+        update($asset);
+end

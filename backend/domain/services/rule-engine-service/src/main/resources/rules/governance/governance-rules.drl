@@ -1,0 +1,108 @@
+package rules.governance
+
+import com.enterprise.dataplatform.ruleengine.domain.model.AssetEvaluation
+
+// =========================================
+// 治理动作推荐规则集
+// 综合分析数据质量问题，推荐治理动作和优先级
+// =========================================
+
+rule "Governance - Critical Quality Issue"
+    salience 100
+    when
+        $asset : AssetEvaluation(
+            qualityIssues > 20 || completeness < 0.50
+        )
+    then
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("QUALITY_FIX");
+        $asset.setGovernancePriority("CRITICAL");
+        $asset.setEvaluationSummary("严重质量问题：数据完整度低于50%或质量 issues 超过20个，需立即治理");
+        $asset.getEvaluationTags().add("严重质量问题");
+        $asset.getTriggeredRules().add("Governance-CriticalQuality");
+        update($asset);
+end
+
+rule "Governance - High Priority Compliance Fix"
+    salience 95
+    when
+        $asset : AssetEvaluation(
+            complianceStatus == "NON_COMPLIANT",
+            qualityScore > 60
+        )
+    then
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("COMPLIANCE_FIX");
+        $asset.setGovernancePriority("HIGH");
+        $asset.getEvaluationSummary("合规问题：数据质量尚可但不满足标准规范，需修复合规问题");
+        $asset.getEvaluationTags().add("合规修复");
+        $asset.getTriggeredRules().add("Governance-ComplianceFix");
+        update($asset);
+end
+
+rule "Governance - Sensitive Data Without Owner"
+    salience 90
+    when
+        $asset : AssetEvaluation(
+            (sensitivityLevel == "HIGH" || sensitivityLevel == "CRITICAL"),
+            (owner == null || owner.length() == 0)
+        )
+    then
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("ACCESS_REVIEW");
+        $asset.setGovernancePriority("CRITICAL");
+        $asset.getEvaluationSummary("安全风险：敏感数据未指定负责人");
+        $asset.getEvaluationTags().add("安全风险");
+        $asset.getTriggeredRules().add("Governance-SensitiveNoOwner");
+        update($asset);
+end
+
+rule "Governance - Orphaned Asset"
+    salience 85
+    when
+        $asset : AssetEvaluation(
+            (owner == null || owner.length() == 0),
+            (businessDomain == null || businessDomain.length() == 0)
+        )
+    then
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("ACCESS_REVIEW");
+        $asset.setGovernancePriority("MEDIUM");
+        $asset.setEvaluationSummary("孤儿资产：无负责人且未归属业务域");
+        $asset.getEvaluationTags().add("孤儿资产");
+        $asset.getTriggeredRules().add("Governance-OrphanedAsset");
+        update($asset);
+end
+
+rule "Governance - Quality Degradation Alert"
+    salience 80
+    when
+        $asset : AssetEvaluation(
+            qualityIssues > 5 && qualityIssues <= 20,
+            completeness < 0.80
+        )
+    then
+        $asset.setNeedsGovernanceAction(true);
+        $asset.setGovernanceActionType("QUALITY_FIX");
+        $asset.setGovernancePriority("HIGH");
+        $asset.getEvaluationSummary("质量下降警告：存在5-20个质量问题且完整度低于80%");
+        $asset.getEvaluationTags().add("质量下降");
+        $asset.getTriggeredRules().add("Governance-QualityDegradation");
+        update($asset);
+end
+
+rule "Governance - No Action Needed"
+    salience 30
+    when
+        $asset : AssetEvaluation(
+            needsGovernanceAction == false,
+            qualityScore > 75,
+            complianceStatus == "COMPLIANT"
+        )
+    then
+        $asset.setGovernancePriority("LOW");
+        $asset.setGovernanceActionType("NONE");
+        $asset.setEvaluationSummary("数据资产状态良好，暂无需治理动作");
+        $asset.getTriggeredRules().add("Governance-NoAction");
+        update($asset);
+end

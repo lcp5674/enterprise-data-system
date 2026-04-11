@@ -1,0 +1,41 @@
+/**
+ * SSO回调页面样式
+ */
+
+.sso-callback-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+}
+
+.sso-callback-card {
+  width: 100%;
+  max-width: 500px;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+
+  .sso-callback-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 0;
+    gap: 16px;
+
+    .ant-spin {
+      margin-bottom: 16px;
+    }
+  }
+}
+
+@media (max-width: 576px) {
+  .sso-callback-container {
+    padding: 16px;
+  }
+
+  .sso-callback-card {
+    max-width: 100%;
+  }
+}

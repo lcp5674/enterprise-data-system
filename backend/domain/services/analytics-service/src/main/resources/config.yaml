@@ -1,0 +1,211 @@
+# ClickHouse DDL Scripts for EDAMS Analytics Service
+# Database: edams_analytics
+
+# Create database if not exists
+CREATE DATABASE IF NOT EXISTS edams_analytics;
+
+# ============================================
+# Asset Analytics Table
+# ============================================
+# Stores asset access statistics for heatmap and trending analysis
+CREATE TABLE IF NOT EXISTS edams_analytics.asset_analytics (
+    id UInt64,
+    asset_id String,
+    asset_name String,
+    asset_type String,
+    owner_id String,
+    department String,
+    access_count UInt32,
+    download_count UInt32,
+    share_count UInt32,
+    comment_count UInt32,
+    quality_score Float32,
+    value_score Float32,
+    freshness_score Float32,
+    completeness_score Float32,
+    tags Array(String),
+    created_at DateTime,
+    updated_at DateTime,
+    date Date DEFAULT toDate(created_at)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(date)
+ORDER BY (date, asset_id)
+TTL date + INTERVAL 180 DAY
+SETTINGS index_granularity = 8192;
+
+# Materialized view for asset heatmap aggregation
+CREATE MATERIALIZED VIEW IF NOT EXISTS edams_analytics.asset_heatmap_mv
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(hour)
+ORDER BY (asset_type, asset_id, hour)
+AS SELECT
+    asset_type,
+    asset_id,
+    asset_name,
+    toStartOfHour(created_at) AS hour,
+    count() AS access_count,
+    sum(download_count) AS total_downloads,
+    sum(share_count) AS total_shares,
+    avg(quality_score) AS avg_quality_score,
+    avg(value_score) AS avg_value_score
+FROM edams_analytics.asset_analytics
+GROUP BY asset_type, asset_id, asset_name, hour;
+
+# ============================================
+# Quality Trend Table
+# ============================================
+# Stores quality check trend data over time
+CREATE TABLE IF NOT EXISTS edams_analytics.quality_trend (
+    id UInt64,
+    check_time DateTime,
+    asset_id String,
+    asset_name String,
+    check_type String,
+    total_checks UInt32,
+    passed_checks UInt32,
+    failed_checks UInt32,
+    pass_rate Float32,
+    avg_score Float32,
+    min_score Float32,
+    max_score Float32,
+    avg_completeness Float32,
+    avg_freshness Float32,
+    avg_accuracy Float32,
+    avg_consistency Float32,
+    dimension_scores Array(String),
+    created_at DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree()
+PARTITION BY toYYYYMM(check_time)
+ORDER BY (asset_id, check_time)
+TTL check_time + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+# Materialized view for quality trend aggregation by time
+CREATE MATERIALIZED VIEW IF NOT EXISTS edams_analytics.quality_trend_hourly_mv
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(check_hour)
+ORDER BY (check_type, check_hour)
+AS SELECT
+    check_type,
+    toStartOfHour(check_time) AS check_hour,
+    count() AS total_assets,
+    sum(total_checks) AS total_checks,
+    sum(passed_checks) AS passed_checks,
+    sum(failed_checks) AS failed_checks,
+    avg(pass_rate) AS avg_pass_rate,
+    avg(avg_score) AS avg_score
+FROM edams_analytics.quality_trend
+GROUP BY check_type, check_hour;
+
+# ============================================
+# User Behavior Table
+# ============================================
+# Stores user activity logs for behavior analysis
+CREATE TABLE IF NOT EXISTS edams_analytics.user_behavior (
+    id UInt64,
+    user_id String,
+    user_name String,
+    department String,
+    action_type String,
+    asset_id String,
+    asset_name String,
+    asset_type String,
+    duration UInt32,
+    result_status String,
+    session_id String,
+    ip_address String,
+    user_agent String,
+    error_message String,
+    metadata String,
+    timestamp DateTime DEFAULT now(),
+    date Date DEFAULT toDate(timestamp)
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(date)
+ORDER BY (date, user_id, timestamp)
+TTL date + INTERVAL 90 DAY
+SETTINGS index_granularity = 8192;
+
+# Materialized view for user behavior aggregation
+CREATE MATERIALIZED VIEW IF NOT EXISTS edams_analytics.user_behavior_hourly_mv
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(hour)
+ORDER BY (user_id, action_type, hour)
+AS SELECT
+    user_id,
+    user_name,
+    department,
+    action_type,
+    toStartOfHour(timestamp) AS hour,
+    count() AS action_count,
+    sum(duration) AS total_duration,
+    avg(duration) AS avg_duration
+FROM edams_analytics.user_behavior
+GROUP BY user_id, user_name, department, action_type, hour;
+
+# ============================================
+# Data Quality Metrics Table
+# ============================================
+# Stores aggregated data quality metrics
+CREATE TABLE IF NOT EXISTS edams_analytics.data_quality_metrics (
+    id UInt64,
+    metric_time DateTime,
+    metric_category String,
+    metric_name String,
+    metric_value Float64,
+    metric_unit String,
+    threshold_value Float64,
+    alert_level String,
+    dimensions String,
+    created_at DateTime DEFAULT now()
+) ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(metric_time)
+ORDER BY (metric_category, metric_name, metric_time)
+TTL metric_time + INTERVAL 180 DAY
+SETTINGS index_granularity = 8192;
+
+# ============================================
+# Asset Catalog Statistics Table
+# ============================================
+# Stores asset catalog statistics for reporting
+CREATE TABLE IF NOT EXISTS edams_analytics.asset_catalog_stats (
+    id UInt64,
+    stat_time DateTime,
+    asset_type String,
+    total_count UInt32,
+    active_count UInt32,
+    archived_count UInt32,
+    total_size_bytes UInt64,
+    avg_size_bytes Float64,
+    total_tags UInt32,
+    avg_tags_per_asset Float32,
+    created_at DateTime DEFAULT now()
+) ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMM(stat_time)
+ORDER BY (asset_type, stat_time)
+TTL stat_time + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;
+
+# ============================================
+# Analytics Summary Table
+# ============================================
+# Pre-computed analytics summaries for dashboard
+CREATE TABLE IF NOT EXISTS edams_analytics.analytics_summary (
+    id UInt64,
+    summary_type String,
+    summary_date Date,
+    dimension_type String,
+    dimension_value String,
+    metric_name String,
+    metric_value Float64,
+    metric_count UInt64,
+    min_value Float64,
+    max_value Float64,
+    avg_value Float64,
+    p50_value Float64,
+    p90_value Float64,
+    p99_value Float64,
+    created_at DateTime DEFAULT now()
+) ENGINE = SummingMergeTree()
+ORDER BY (summary_type, summary_date, dimension_type, dimension_value, metric_name)
+TTL summary_date + INTERVAL 365 DAY
+SETTINGS index_granularity = 8192;

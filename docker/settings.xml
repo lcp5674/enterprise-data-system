@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Maven Settings for EDAMS CI/CD Builds
+  使用阿里云镜像加速
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0
+                              https://maven.apache.org/xsd/settings-1.2.0.xsd">
+
+    <!-- 本地仓库 -->
+    <localRepository>/root/.m2/repository</localRepository>
+
+    <!-- 交互模式 -->
+    <interactiveMode>true</interactiveMode>
+
+    <!-- 是否使用插件更新检查 -->
+    <usePluginRegistry>false</usePluginRegistry>
+
+    <!-- 是否离线 -->
+    <offline>false</offline>
+
+    <!-- 插件组 -->
+    <pluginGroups>
+        <pluginGroup>org.apache.maven.plugins</pluginGroup>
+        <pluginGroup>org.codehaus.mojo</pluginGroup>
+    </pluginGroups>
+
+    <!-- 镜像配置 -->
+    <mirrors>
+        <!-- 阿里云公共仓库镜像 -->
+        <mirror>
+            <id>aliyun-central</id>
+            <mirrorOf>central</mirrorOf>
+            <name>Aliyun Maven Central</name>
+            <url>https://maven.aliyun.com/repository/central</url>
+        </mirror>
+
+        <!-- 阿里云Spring镜像 -->
+        <mirror>
+            <id>aliyun-spring</id>
+            <mirrorOf>spring,repo1,repo2</mirrorOf>
+            <name>Aliyun Spring</name>
+            <url>https://maven.aliyun.com/repository/spring</url>
+        </mirror>
+
+        <!-- 阿里云Google镜像 -->
+        <mirror>
+            <id>aliyun-google</id>
+            <mirrorOf>google</mirrorOf>
+            <name>Aliyun Google</name>
+            <url>https://maven.aliyun.com/repository/google</url>
+        </mirror>
+
+        <!-- 阿里云JCenter镜像 -->
+        <mirror>
+            <id>aliyun-jcenter</id>
+            <mirrorOf>jcenter</mirrorOf>
+            <name>Aliyun JCenter</name>
+            <url>https://maven.aliyun.com/repository/jcenter</url>
+        </mirror>
+
+        <!-- 阿里云Gradle镜像 -->
+        <mirror>
+            <id>aliyun-gradle-plugin</id>
+            <mirrorOf>gradle-plugin</mirrorOf>
+            <name>Aliyun Gradle Plugin</name>
+            <url>https://maven.aliyun.com/repository/gradle-plugin</url>
+        </mirror>
+    </mirrors>
+
+    <!-- 仓库配置 -->
+    <profiles>
+        <!-- 激活的profile -->
+        <activeProfiles>
+            <activeProfile>china-mirror</activeProfile>
+        </activeProfiles>
+
+        <!-- 国内镜像profile -->
+        <profile>
+            <id>china-mirror</id>
+            <repositories>
+                <repository>
+                    <id>central</id>
+                    <url>https://maven.aliyun.com/repository/central</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+                <repository>
+                    <id>spring</id>
+                    <url>https://maven.aliyun.com/repository/spring</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>central-plugins</id>
+                    <url>https://maven.aliyun.com/repository/central</url>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+
+        <!-- JDK17配置 -->
+        <profile>
+            <id>jdk-17</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+                <jdk>17</jdk>
+            </activation>
+            <properties>
+                <maven.compiler.source>17</maven.compiler.source>
+                <maven.compiler.target>17</maven.compiler.target>
+                <maven.compiler.compilerVersion>17</maven.compiler.compilerVersion>
+                <maven.compiler.release>17</maven.compiler.release>
+                <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+                <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+            </properties>
+        </profile>
+    </profiles>
+
+    <!-- 加密设置 -->
+    <servers>
+        <!-- Docker Registry认证 -->
+        <server>
+            <id>docker-registry</id>
+            <username>${env.DOCKER_REGISTRY_USER}</username>
+            <password>${env.DOCKER_REGISTRY_PASSWORD}</password>
+        </server>
+    </servers>
+</settings>

@@ -1,0 +1,251 @@
+# =====================================================
+# EDAMS Helm Values - 测试环境
+# =====================================================
+
+# 全局配置
+global:
+  imageRegistry: registry.example.com
+  imagePullSecrets:
+    - name: registry-secret
+  storageClass: standard
+
+# 命名空间
+namespace: edams-test
+
+# 副本数配置
+replicaCount: 2
+
+# 镜像配置
+image:
+  repository: edams
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# 前端镜像
+frontend:
+  enabled: true
+  image:
+    repository: edams-frontend
+    tag: "latest"
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 128Mi
+
+# 后端服务配置
+services:
+  gateway:
+    enabled: true
+    replicaCount: 2
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+  auth:
+    enabled: true
+    replicaCount: 2
+    service:
+      type: ClusterIP
+      port: 8080
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+  user:
+    enabled: true
+    replicaCount: 2
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+  permission:
+    enabled: true
+    replicaCount: 2
+
+  notification:
+    enabled: true
+    replicaCount: 2
+
+  knowledge:
+    enabled: true
+    replicaCount: 2
+
+  llm:
+    enabled: true
+    replicaCount: 2
+
+  chatbot:
+    enabled: true
+    replicaCount: 2
+
+  workflow:
+    enabled: true
+    replicaCount: 2
+
+  lifecycle:
+    enabled: true
+    replicaCount: 2
+
+  version:
+    enabled: true
+    replicaCount: 1
+
+  collaboration:
+    enabled: true
+    replicaCount: 2
+
+  aiops:
+    enabled: true
+    replicaCount: 2
+
+  asset:
+    enabled: true
+    replicaCount: 2
+
+  lineage:
+    enabled: true
+    replicaCount: 2
+
+  quality:
+    enabled: true
+    replicaCount: 2
+
+  standard:
+    enabled: true
+    replicaCount: 2
+
+  governance:
+    enabled: true
+    replicaCount: 2
+
+  portal:
+    enabled: true
+    replicaCount: 2
+
+  admin:
+    enabled: true
+    replicaCount: 2
+
+  metadata:
+    enabled: true
+    replicaCount: 2
+
+  index:
+    enabled: true
+    replicaCount: 2
+
+# 基础设施配置
+infrastructure:
+  mysql:
+    enabled: true
+    architecture: standalone
+    auth:
+      database: edams
+      username: edams
+      password: edams123
+    primary:
+      persistence:
+        enabled: true
+        size: 10Gi
+
+  redis:
+    enabled: true
+    architecture: standalone
+    auth:
+      password: redis123
+    master:
+      persistence:
+        enabled: true
+        size: 1Gi
+
+  kafka:
+    enabled: true
+    replicaCount: 1
+    kraft:
+      enabled: true
+    persistence:
+      enabled: true
+      size: 5Gi
+
+  elasticsearch:
+    enabled: true
+    master:
+      replicas: 1
+    data:
+      replicas: 1
+    persistence:
+      enabled: true
+      size: 10Gi
+
+  neo4j:
+    enabled: true
+    persistence:
+      enabled: true
+      size: 5Gi
+
+# Ingress配置
+ingress:
+  enabled: true
+  className: nginx
+  hostname: edams-test.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+  tls:
+    enabled: true
+    secretName: edams-tls-secret
+
+# 监控配置
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+
+# Pod调度配置
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - edams
+          topologyKey: kubernetes.io/hostname
+
+tolerations:
+  - key: "node-type"
+    operator: "Equal"
+    value: "application"
+    effect: "NoSchedule"
+
+nodeSelector:
+  node-type: application

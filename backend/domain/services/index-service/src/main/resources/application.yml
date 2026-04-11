@@ -1,0 +1,129 @@
+server:
+  port: 8095
+  servlet:
+    context-path: /index
+
+spring:
+  application:
+    name: index-service
+
+  # Elasticsearch配置
+  elasticsearch:
+    uris: http://${ES_HOST:localhost}:${ES_PORT:9200}
+    username: ${ES_USERNAME:}
+    password: ${ES_PASSWORD:}
+    connection-timeout: 5s
+    socket-timeout: 30s
+
+  # Kafka配置
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    consumer:
+      group-id: index-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.enterprise.dataplatform.index.event"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.enterprise.dataplatform.index.event.AssetEvent
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # PostgreSQL配置（用于存储索引元数据）
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:edams_index}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      pool-name: IndexHikariCP
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+    open-in-view: false
+
+# Nacos服务发现
+spring.cloud.nacos.discovery:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+
+# Nacos配置中心
+spring.cloud.nacos.config:
+  server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+  namespace: ${NACOS_NAMESPACE:dev}
+  group: ${NACOS_GROUP:EDAMS_GROUP}
+  file-extension: yml
+  refresh-enabled: true
+
+# Kafka Topic配置
+index:
+  kafka:
+    topics:
+      asset-created: dam.asset.created
+      asset-updated: dam.asset.updated
+      asset-deleted: dam.asset.deleted
+    consumer:
+      concurrency: 3
+
+  # 索引配置
+  index:
+    asset:
+      name: asset_index
+      shards: 3
+      replicas: 1
+      refresh-interval: 1s
+
+  # 搜索配置
+  search:
+    default-page-size: 20
+    max-page-size: 100
+    highlight-enabled: true
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.dataplatform.index: DEBUG
+    org.springframework.data.elasticsearch: INFO
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Swagger配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+
+# SkyWalking Agent配置（通过JVM参数启动）
+# -javaagent:/opt/skywalking-agent/skywalking-agent.jar
+# -Dskywalking.agent.service_name=index-service
+# -Dskywalking.collector.backend_service=skywalking-oap:11800

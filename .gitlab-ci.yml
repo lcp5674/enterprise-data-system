@@ -1,593 +1,750 @@
 # =====================================================
 # EDAMS - GitLab CI/CD Pipeline
-# 企业数据资产管理系统 - CI/CD流水线配置
+# 企业数据资产管理系统 CI/CD流水线
 # =====================================================
 
-# 全局配置
 variables:
-  # 基础配置
-  MAVEN_CLI_OPTS: "-s .mvn/settings.xml --batch-mode"
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  # Docker配置
+  DOCKER_REGISTRY: registry.example.com
+  DOCKER_IMAGE_TAG: $CI_REGISTRY_IMAGE:latest
   
-  # 镜像配置
-  REGISTRY_URL: "${CI_REGISTRY}"
-  REGISTRY_USER: "${CI_REGISTRY_USER}"
-  REGISTRY_PASS: "${CI_REGISTRY_PASSWORD}"
+  # Maven配置
+  MAVEN_OPTS: "-Dmaven.repo.local=/cache/maven"
+  MAVEN_CACHE_DIR: /cache/maven
   
-  # 镜像标签
-  IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
-  LATEST_TAG: "latest"
+  # Node配置
+  NPM_CONFIG_CACHE: /cache/npm
   
-  # Kubernetes配置
-  K8S_NAMESPACE_PROD: "edams-prod"
-  K8S_NAMESPACE_STAGING: "edams-staging"
-  K8S_CONTEXT: "${K8S_CONTEXT}"
+  # Flutter配置
+  FLUTTER_CACHE_DIR: /cache/flutter
   
-  # 应用配置
-  PROJECT_NAME: "enterprise-data-system"
-  DOCKER_FILE: "infrastructure/docker/Dockerfile"
+  # 项目目录
+  BACKEND_PARENT_DIR: microservices/edams-parent
+  SERVICES_DIR: services
+  FRONTEND_DIR: edams-web
+  MOBILE_DIR: edams-mobile
   
-  # SonarQube配置
-  SONAR_HOST_URL: "https://sonar.enterprise.com"
+  # Java版本
+  JDK_VERSION: "17"
   
-  # 跳过测试（在特定阶段）
-  MAVEN_SKIP_TESTS: "${MAVEN_SKIP_TESTS:-false}"
+  # 服务列表
+  EDAMS_PARENT_SERVICES: "edams-common,edams-gateway,edams-auth,edams-user,edams-permission,edams-notification,edams-knowledge,edams-llm,edams-chatbot,edams-workflow,edams-lifecycle,edams-version,edams-collaboration,edams-aiops,edams-asset,edge-iot-service,value-service,sla-service,incentive-service,watermark-service,sandbox-service"
+  SERVICES_SERVICES: "lineage-service,standard-service,quality-service,governance-engine,portal-service,admin-service,metadata-service,index-service"
 
-# 缓存配置
+# 缓存策略
 cache:
-  key: "${CI_COMMIT_REF_SLUG}"
+  key: ${CI_COMMIT_REF_SLUG}-cache
   paths:
-    - .m2/repository/
-    - target/
+    - /cache/maven/repository
+    - /cache/npm
+    - /cache/flutter
+    - .m2/repository
   policy: pull-push
 
-# 阶段定义
+# 默认配置
+default:
+  image: maven:3.9-eclipse-temurin-17
+  before_script:
+    - export MAVEN_OPTS="-Dmaven.repo.local=/cache/maven/repository"
+    - mkdir -p /cache/maven/repository
+    - mkdir -p /cache/npm
+    - mkdir -p /cache/flutter
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+
+# =====================================================
+# Pipeline Stages
+# =====================================================
 stages:
-  - validate     # 代码验证
-  - test         # 测试
-  - build        # 构建
-  - quality      # 代码质量检查
-  - security     # 安全扫描
-  - package      # 打包
-  - docker       # 构建Docker镜像
-  - deploy-staging  # 部署到测试环境
-  - integration-test # 集成测试
-  - performance-test # 性能测试
-  - deploy-prod      # 部署到生产环境
-  - notify       # 通知
-
-# 工作流规则
-workflow:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      variables:
-        DEPLOY_ENVIRONMENT: "staging"
-    - if: '$CI_COMMIT_BRANCH == "main"'
-      variables:
-        DEPLOY_ENVIRONMENT: "production"
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-      variables:
-        DEPLOY_ENVIRONMENT: "staging"
-    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.*/'
-      variables:
-        DEPLOY_ENVIRONMENT: "staging"
-    - if: '$CI_COMMIT_TAG'  # 标签触发发布
-      variables:
-        DEPLOY_ENVIRONMENT: "production"
-        IMAGE_TAG: "${CI_COMMIT_TAG}"
+  - build:backend-parent    # 构建edams-parent (21个微服务)
+  - build:services          # 构建services (8个微服务)
+  - build:frontend          # 构建前端
+  - build:mobile             # 构建移动端
+  - test                     # 测试阶段
+  - security                 # 安全扫描
+  - package                  # Docker镜像打包
+  - deploy:test              # 部署测试环境
+  - deploy:staging           # 部署预发布环境
+  - deploy:prod              # 部署生产环境
 
 # =====================================================
-# 阶段1: 验证
+# 构建阶段
 # =====================================================
 
-validate-code:
-  stage: validate
-  image: maven:3.9.4-eclipse-temurin-17
+# 构建edams-parent公共模块 (所有其他模块依赖)
+build:edams-common:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
   script:
-    # 检查代码格式
-    - echo "📋 代码格式检查..."
-    - mvn $MAVEN_CLI_OPTS spotless:check
-    - echo "✅ 代码格式检查通过"
-    
-    # 依赖安全检查
-    - echo "📋 依赖安全检查..."
-    - mvn $MAVEN_CLI_OPTS org.owasp:dependency-check-maven:check
-    - echo "✅ 依赖安全检查完成"
-    
-    # 许可证检查
-    - echo "📋 许可证检查..."
-    - mvn $MAVEN_CLI_OPTS org.codehaus.mojo:license-maven-plugin:aggregate-add-third-party
-    - echo "✅ 许可证检查完成"
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl edams-common -am
+    - cp edams-common/target/*.jar ${CI_PROJECT_DIR}/build-output/ || true
   artifacts:
-    reports:
-      dependency_scanning:
-        - target/dependency-check-report.xml
     paths:
-      - target/generated-sources/license/THIRD-PARTY.txt
-  allow_failure: false
+      - microservices/edams-parent/edams-common/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-parent核心网关服务
+build:edams-gateway:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl edams-gateway -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/edams-gateway/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/edams-gateway/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-auth认证服务
+build:edams-auth:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl edams-auth -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/edams-auth/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/edams-auth/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-parent核心业务服务 (并行构建)
+build:core-services:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - edams-user
+          - edams-permission
+          - edams-notification
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/${SERVICE}/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-parent知识智能域服务
+build:knowledge-services:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - edams-knowledge
+          - edams-llm
+          - edams-chatbot
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/${SERVICE}/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-parent高级功能域服务
+build:advanced-services:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - edge-iot-service
+          - value-service
+          - sla-service
+          - incentive-service
+          - watermark-service
+          - sandbox-service
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/${SERVICE}/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建edams-parent运营支撑域服务
+build:operation-services:
+  stage: build:backend-parent
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - edams-workflow
+          - edams-lifecycle
+          - edams-version
+          - edams-collaboration
+          - edams-aiops
+          - edams-asset
+  needs:
+    - build:edams-common
+  script:
+    - cd microservices/edams-parent
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - microservices/edams-parent/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - microservices/edams-parent/${SERVICE}/**/*
+      - microservices/edams-parent/edams-common/**/*
+      - microservices/edams-parent/pom.xml
+
+# 构建services独立微服务
+build:services-core:
+  stage: build:services
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - lineage-service
+          - quality-service
+          - standard-service
+          - governance-engine
+  script:
+    - cd services
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - services/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - services/${SERVICE}/**/*
+      - services/pom.xml
+
+# 构建services支撑服务
+build:services-support:
+  stage: build:services
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - SERVICE:
+          - portal-service
+          - admin-service
+          - metadata-service
+          - index-service
+  script:
+    - cd services
+    - mvn clean package -DskipTests -B -pl ${SERVICE} -am
+  artifacts:
+    paths:
+      - services/${SERVICE}/target/*.jar
+    expire_in: 1 day
+  only:
+    changes:
+      - services/${SERVICE}/**/*
+      - services/pom.xml
+
+# =====================================================
+# 前端构建
+# =====================================================
+
+build:frontend:
+  stage: build:frontend
+  image: node:18-alpine
+  before_script:
+    - npm config set cache /cache/npm
+    - npm ci --cache /cache/npm --prefer-offline
+  script:
+    - cd edams-web
+    - npm install
+    - npm run build:prod
+    - echo "Frontend build completed"
+  artifacts:
+    name: frontend-dist
+    paths:
+      - edams-web/dist
+      - edams-web/dist.zip
+    expire_in: 1 day
+  only:
+    changes:
+      - edams-web/**/*
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}-frontend
+    paths:
+      - /cache/npm
+    policy: pull-push
+
+# =====================================================
+# 移动端构建
+# =====================================================
+
+build:mobile-android:
+  stage: build:mobile
+  image: cirrusci/flutter:latest
+  before_script:
+    - flutter config --no-analytics
+    - flutter precache
+  script:
+    - cd edams-mobile
+    - flutter pub get
+    - flutter build apk --release
+    - ls -la build/app/outputs/flutter-apk/
+  artifacts:
+    name: mobile-android
+    paths:
+      - edams-mobile/build/app/outputs/flutter-apk/*.apk
+    expire_in: 7 days
+  only:
+    changes:
+      - edams-mobile/**/*
   tags:
-    - maven
-    - java17
+    - flutter
 
-# =====================================================
-# 阶段2: 测试
-# =====================================================
-
-unit-tests:
-  stage: test
-  image: maven:3.9.4-eclipse-temurin-17
+build:mobile-ios:
+  stage: build:mobile
+  image: cirrusci/flutter:latest
+  before_script:
+    - flutter config --no-analytics
+    - flutter precache
+    - xcodebuild -version
+    - xcrun simctl list devices available
   script:
-    - echo "🧪 执行单元测试..."
-    - mvn $MAVEN_CLI_OPTS clean test -DskipITs=true
-    
-    # 生成测试覆盖率报告
-    - mvn $MAVEN_CLI_OPTS jacoco:report
-    - echo "✅ 单元测试完成"
+    - cd edams-mobile
+    - flutter pub get
+    - flutter build ios --release --no-codesign
+    - ls -la build/ios/iphoneos/
   artifacts:
-    reports:
-      junit:
-        - "**/target/surefire-reports/TEST-*.xml"
-      coverage_report:
-        coverage_format: cobertura
-        path: "**/target/site/jacoco/jacoco.xml"
+    name: mobile-ios
     paths:
-      - target/site/jacoco/
+      - edams-mobile/build/ios/iphoneos/*.app
+    expire_in: 7 days
+  only:
+    changes:
+      - edams-mobile/**/*
+  when: manual
+  tags:
+    - flutter
+    - ios
+
+# =====================================================
+# 测试阶段
+# =====================================================
+
+test:backend:
+  stage: test
+  image: maven:3.9-eclipse-temurin-17
+  parallel:
+    matrix:
+      - PROJECT_DIR:
+          - microservices/edams-parent
+          - services
+  script:
+    - cd ${PROJECT_DIR}
+    - mvn test -B -Dsurefire.useFile=false -DforkCount=2 -DreuseForks=true
   coverage: '/Total.*?([0-9]{1,3})%/'
-  allow_failure: false
-  tags:
-    - maven
-    - java17
-
-integration-tests-ci:
-  stage: test
-  image: maven:3.9.4-eclipse-temurin-17
-  script:
-    - echo "🔧 环境准备..."
-    # 启动测试环境
-    - docker-compose -f infrastructure/docker/dev/docker-compose.yml up -d mysql redis
-    
-    - echo "🧪 执行集成测试..."
-    - mvn $MAVEN_CLI_OPTS clean verify -Dit.test=*IT -DskipTests=false
-    
-    # 等待测试完成
-    - sleep 30
-    - echo "✅ 集成测试完成"
   artifacts:
+    name: test-results-${PROJECT_DIR}
+    paths:
+      - microservices/edams-parent/target/surefire-reports
+      - services/target/surefire-reports
     reports:
       junit:
-        - "**/target/failsafe-reports/TEST-*.xml"
-  dependencies:
-    - unit-tests
-  allow_failure: false
-  tags:
-    - docker
-    - maven
+        - microservices/edams-parent/target/surefire-reports/TEST-*.xml
+        - services/target/sureure-reports/TEST-*.xml
+    expire_in: 7 days
+  coverage_report:
+    coverage_format: cobertura
+    path: microservices/edams-parent/target/site/cobertura/coverage.xml
+  only:
+    changes:
+      - microservices/edams-parent/**/*
+      - services/**/*
+  retry:
+    max: 1
 
-# =====================================================
-# 阶段3: 构建
-# =====================================================
-
-build-java:
-  stage: build
-  image: maven:3.9.4-eclipse-temurin-17
+test:frontend:
+  stage: test
+  image: node:18-alpine
+  before_script:
+    - npm config set cache /cache/npm
   script:
-    - echo "🔨 编译项目..."
-    - mvn $MAVEN_CLI_OPTS clean compile -DskipTests
-    - echo "✅ 编译完成"
+    - cd edams-web
+    - npm install
+    - npm run test -- --coverage --passWithNoTests
+  coverage: '/All files[^|]*\|[^|]*\s+([0-9]{1,3})/'
+  artifacts:
+    name: frontend-test-results
+    paths:
+      - edams-web/coverage
+    expire_in: 7 days
+  only:
+    changes:
+      - edams-web/**/*
+
+test:e2e:
+  stage: test
+  image: node:18-alpine
+  services:
+    - docker:dind
+  before_script:
+    - npm config set cache /cache/npm
+    - npx playwright install --with-deps chromium
+  script:
+    - cd e2e-tests
+    - npm install
+    - npm run test:docker || npm run test
+  artifacts:
+    when: always
+    paths:
+      - e2e-tests/test-results/
+      - e2e-tests/playwright-report/
+      - e2e-tests/screenshots/
+    expire_in: 14 days
+  only:
+    changes:
+      - e2e-tests/**/*
+      - edams-web/**/*
+  allow_failure: true
+
+# =====================================================
+# 安全扫描阶段
+# =====================================================
+
+security:dependency-check:
+  stage: security
+  image: maven:3.9-eclipse-temurin-17
+  script:
+    - cd microservices/edams-parent
+    - mvn org.owasp:dependency-check-maven:check -B -DskipTests -DconnectionString=
+    - echo "Dependency check completed"
   artifacts:
     paths:
-      - target/classes/
-      - target/*.jar
-  dependencies:
-    - unit-tests
-  tags:
-    - maven
-    - java17
+      - microservices/edams-parent/target/dependency-check-report.html
+    expire_in: 30 days
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
 
-# =====================================================
-# 阶段4: 代码质量检查
-# =====================================================
-
-sonarqube-check:
-  stage: quality
-  image: maven:3.9.4-eclipse-temurin-17
-  script:
-    - echo "📊 运行SonarQube分析..."
-    - mvn $MAVEN_CLI_OPTS sonar:sonar
-      -Dsonar.projectKey=enterprise-data-system
-      -Dsonar.host.url=$SONAR_HOST_URL
-      -Dsonar.login=$SONAR_TOKEN
-      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-    - echo "✅ SonarQube分析完成"
-  dependencies:
-    - unit-tests
-  allow_failure: false
-  tags:
-    - sonarqube
-    - maven
-
-# =====================================================
-# 阶段5: 安全扫描
-# =====================================================
-
-sast-scan:
+security:trivy-scan:
   stage: security
-  image: registry.gitlab.com/gitlab-org/security-products/container-scanning:latest
+  image: aquasec/trivy:latest
+  before_script:
+    - trivy version
   script:
-    # SAST - 静态应用安全测试
-    - echo "🔒 执行静态应用安全扫描..."
-    - |
-      semgrep scan \
-        --config auto \
-        --metrics=off \
-        --json \
-        --output=sast-report.json
-    - echo "✅ SAST扫描完成"
+    - trivy image --severity HIGH,CRITICAL ${DOCKER_REGISTRY}/edams:${CI_COMMIT_SHORT_SHA} || echo "Image scan completed"
+    - trivy filesystem --severity HIGH,CRITICAL . --scanners vuln,config,secret || echo "Filesystem scan completed"
   artifacts:
-    reports:
-      sast: sast-report.json
-    expire_in: 1 week
-  tags:
-    - security
-    - docker
-
-container-scanning:
-  stage: security
-  image: registry.gitlab.com/gitlab-org/security-products/container-scanning:latest
-  script:
-    # 容器安全扫描
-    - echo "📦 执行容器安全扫描..."
-    - |
-      trivy image \
-        --format template \
-        --template "@/contrib/gitlab.tpl" \
-        --output container-scanning-report.json \
-        $REGISTRY_URL/$CI_PROJECT_PATH:$IMAGE_TAG
-    - echo "✅ 容器安全扫描完成"
-  artifacts:
-    reports:
-      container_scanning: container-scanning-report.json
-    expire_in: 1 week
-  dependencies:
-    - docker-build
-  tags:
-    - security
-    - docker
+    paths:
+      - trivy-report.json
+    expire_in: 30 days
+  allow_failure: true
+  only:
+    - main
+    - develop
+    - merge_requests
 
 # =====================================================
-# 阶段6: 打包
+# Docker镜像打包阶段
 # =====================================================
 
-package-services:
+package:backend-images:
   stage: package
-  image: maven:3.9.4-eclipse-temurin-17
-  script:
-    - echo "📦 打包服务..."
-    # 打包所有模块
-    - mvn $MAVEN_CLI_OPTS clean package -DskipTests -Pprod
-    
-    # 生成部署包
-    - mkdir -p deploy
-    - cp edams-gateway/target/*.jar deploy/edams-gateway.jar
-    - cp edams-auth/target/*.jar deploy/edams-auth.jar
-    - cp edams-asset/target/*.jar deploy/edams-asset.jar
-    
-    - echo "✅ 打包完成"
-  artifacts:
-    paths:
-      - deploy/
-  dependencies:
-    - build-java
-    - sonarqube-check
-  tags:
-    - maven
-    - java17
-
-# =====================================================
-# 阶段7: Docker构建
-# =====================================================
-
-docker-build:
-  stage: docker
   image: docker:latest
   services:
     - docker:dind
+  parallel:
+    matrix:
+      - SERVICE_DIR:
+          - microservices/edams-parent/edams-gateway
+          - microservices/edams-parent/edams-auth
+          - microservices/edams-parent/edams-user
+          - microservices/edams-parent/edams-permission
+          - microservices/edams-parent/edams-notification
+          - microservices/edams-parent/edams-knowledge
+          - microservices/edams-parent/edams-llm
+          - microservices/edams-parent/edams-chatbot
+          - microservices/edams-parent/edams-workflow
+          - microservices/edams-parent/edams-lifecycle
+          - microservices/edams-parent/edams-version
+          - microservices/edams-parent/edams-collaboration
+          - microservices/edams-parent/edams-aiops
+          - microservices/edams-parent/edams-asset
+          - microservices/edams-parent/edge-iot-service
+          - microservices/edams-parent/value-service
+          - microservices/edams-parent/sla-service
+          - microservices/edams-parent/incentive-service
+          - microservices/edams-parent/watermark-service
+          - microservices/edams-parent/sandbox-service
+          - services/lineage-service
+          - services/quality-service
+          - services/standard-service
+          - services/governance-engine
+          - services/portal-service
+          - services/admin-service
+          - services/metadata-service
+          - services/index-service
+  before_script:
+    - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${DOCKER_REGISTRY} || echo "Docker login completed"
+    - SERVICE_NAME=$(basename ${SERVICE_DIR})
   script:
-    # 登录Docker Registry
-    - echo "🔑 登录到容器镜像仓库..."
-    - echo $REGISTRY_PASS | docker login -u $REGISTRY_USER --password-stdin $REGISTRY_URL
-    
-    # 构建网关服务镜像
-    - echo "🐳 构建网关服务镜像..."
     - |
-      docker build \
-        -f infrastructure/docker/Dockerfile \
-        --build-arg BUILD_PROFILE=prod \
-        --target runtime \
-        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG \
-        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$LATEST_TAG \
-        .
-    
-    # 构建认证服务镜像
-    - echo "🐳 构建认证服务镜像..."
-    - cp edams-auth/target/*.jar deploy/app.jar
-    - |
-      docker build \
-        -f infrastructure/docker/Dockerfile \
-        --build-arg BUILD_PROFILE=prod \
-        --target runtime \
-        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG \
-        -t $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$LATEST_TAG \
-        .
-    
-    # 推送镜像
-    - echo "🚀 推送镜像到仓库..."
-    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG
-    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$LATEST_TAG
-    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG
-    - docker push $REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$LATEST_TAG
-    
-    - echo "✅ Docker镜像构建完成"
-  dependencies:
-    - package-services
-  tags:
-    - docker
-    - dind
+      SERVICE_NAME=$(basename ${SERVICE_DIR})
+      cd ${SERVICE_DIR}
+      if [ -f target/${SERVICE_NAME}-*.jar ]; then
+        JAR_FILE=$(ls target/${SERVICE_NAME}-*.jar | head -1)
+        docker build \
+          --build-arg JAR_FILE=${JAR_FILE} \
+          --build-arg SERVICE_NAME=${SERVICE_NAME} \
+          -t ${DOCKER_REGISTRY}/edams-${SERVICE_NAME}:${CI_COMMIT_SHORT_SHA} \
+          -t ${DOCKER_REGISTRY}/edams-${SERVICE_NAME}:latest .
+        docker push ${DOCKER_REGISTRY}/edams-${SERVICE_NAME}:${CI_COMMIT_SHORT_SHA}
+        docker push ${DOCKER_REGISTRY}/edams-${SERVICE_NAME}:latest
+      else
+        echo "JAR file not found for ${SERVICE_NAME}"
+      fi
+  only:
+    changes:
+      - microservices/edams-parent/**/*
+      - services/**/*
+  when: manual
+
+package:frontend-image:
+  stage: package
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${DOCKER_REGISTRY} || echo "Docker login completed"
+  script:
+    - cd edams-web
+    - if [ -d dist ]; then
+        docker build -f Dockerfile.frontend -t ${DOCKER_REGISTRY}/edams-frontend:${CI_COMMIT_SHORT_SHA} -t ${DOCKER_REGISTRY}/edams-frontend:latest .
+        docker push ${DOCKER_REGISTRY}/edams-frontend:${CI_COMMIT_SHORT_SHA}
+        docker push ${DOCKER_REGISTRY}/edams-frontend:latest
+      else
+        echo "Frontend dist not found"
+      fi
+  only:
+    changes:
+      - edams-web/**/*
+  when: manual
 
 # =====================================================
-# 阶段8: 部署到测试环境
+# 部署阶段
 # =====================================================
 
-deploy-staging:
-  stage: deploy-staging
+deploy:test:
+  stage: deploy:test
   image: bitnami/kubectl:latest
-  script:
-    - echo "🚀 部署到测试环境..."
-    
-    # 设置kubectl上下文
-    - kubectl config use-context $K8S_CONTEXT
-    
-    # 更新镜像版本
-    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_STAGING
-    - kubectl set image deployment/edams-auth edams-auth=$REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG -n $K8S_NAMESPACE_STAGING
-    
-    # 等待部署完成
-    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_STAGING --timeout=300s
-    - kubectl rollout status deployment/edams-auth -n $K8S_NAMESPACE_STAGING --timeout=300s
-    
-    # 验证部署
-    - kubectl get pods -n $K8S_NAMESPACE_STAGING -l app=edams-gateway
-    - kubectl get pods -n $K8S_NAMESPACE_STAGING -l app=edams-auth
-    
-    - echo "✅ 测试环境部署完成"
   environment:
-    name: staging
-    url: https://staging.edams.com
-  dependencies:
-    - docker-build
-  only:
-    - develop
-    - merge_requests
-  tags:
-    - kubernetes
-    - kubectl
-
-# =====================================================
-# 阶段9: 集成测试
-# =====================================================
-
-api-integration-test:
-  stage: integration-test
-  image: curlimages/curl:latest
+    name: test
+    url: https://edams-test.example.com
+    on_stop: rollback:test
+  before_script:
+    - kubectl config use-context test-cluster
   script:
-    # 等待服务启动
-    - echo "⏳ 等待服务启动..."
-    - timeout 300 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://staging.edams.com/api/health)" != "200" ]]; do sleep 5; done'
-    
-    # 执行API测试
-    - echo "🧪 执行API集成测试..."
-    
-    # 测试认证API
     - |
-      auth_response=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-        "https://staging.edams.com/auth/api/v1/login" \
-        -H "Content-Type: application/json" \
-        -d '{"username":"test_user","password":"test_password"}')
-      echo "认证测试响应码: $auth_response"
-      if [ "$auth_response" != "200" ]; then exit 1; fi
-    
-    # 测试资产API
-    - |
-      asset_response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
-        "https://staging.edams.com/api/v1/assets" \
-        -H "Authorization: Bearer $TEST_TOKEN")
-      echo "资产API测试响应码: $asset_response"
-      if [ "$asset_response" != "200" ]; then exit 1; fi
-    
-    - echo "✅ 集成测试通过"
-  dependencies:
-    - deploy-staging
-  allow_failure: false
+      echo "Deploying to test environment..."
+      # 更新Helm值
+      helm upgrade --install edams ./charts/edams \
+        --namespace edams-test \
+        --create-namespace \
+        --set image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set image.repository=${DOCKER_REGISTRY}/edams \
+        --set frontend.image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set frontend.image.repository=${DOCKER_REGISTRY}/edams-frontend \
+        --wait --timeout 10m
+      # 执行健康检查
+      kubectl rollout status deployment/edams-gateway -n edams-test
+      kubectl get pods -n edams-test
   only:
-    - develop
-  tags:
-    - api-test
+    changes:
+      - microservices/edams-parent/**/*
+      - services/**/*
+      - edams-web/**/*
+      - charts/**/*
+  when: manual
 
-# =====================================================
-# 阶段10: 性能测试
-# =====================================================
-
-performance-test:
-  stage: performance-test
-  image: alpine/curl:latest
-  script:
-    - echo "⚡ 执行性能测试..."
-    
-    # 使用k6进行性能测试
-    - apk add --no-cache k6
-    
-    # 简单的性能测试脚本
-    - cat > performance-test.js << EOF
-      import http from 'k6/http';
-      import { check, sleep } from 'k6';
-      import { Rate } from 'k6/metrics';
-      
-      export let errorRate = new Rate('errors');
-      
-      export let options = {
-        stages: [
-          { duration: '30s', target: 50 },
-          { duration: '1m', target: 100 },
-          { duration: '30s', target: 50 },
-          { duration: '30s', target: 0 },
-        ],
-        thresholds: {
-          http_req_duration: ['p(95)<500'],
-          errors: ['rate<0.1']
-        }
-      };
-      
-      export default function() {
-        const res = http.get('https://staging.edams.com/api/v1/assets');
-        const checkRes = check(res, {
-          'status is 200': (r) => r.status === 200,
-          'response time < 500ms': (r) => r.timings.duration < 500
-        });
-        
-        errorRate.add(!checkRes);
-        sleep(1);
-      }
-      EOF
-    
-    # 执行性能测试
-    - k6 run performance-test.js
-    
-    - echo "✅ 性能测试完成"
-  dependencies:
-    - api-integration-test
-  allow_failure: false
-  only:
-    - develop
-  tags:
-    - performance
-
-# =====================================================
-# 阶段11: 生产环境部署
-# =====================================================
-
-deploy-production:
-  stage: deploy-prod
+rollback:test:
+  stage: deploy:test
   image: bitnami/kubectl:latest
-  script:
-    # 生产环境部署需要手动确认
-    - echo "🚀 部署到生产环境 (需要手动批准)..."
-    - echo "✅ 生产环境部署准备就绪"
   environment:
-    name: production
-    url: https://api.edams.com
+    name: test
+    action: stop
+  script:
+    - kubectl config use-context test-cluster
+    - helm rollback edams -n edams-test
   only:
     - main
   when: manual
-  tags:
-    - kubernetes
-    - production
 
-# 实际的部署任务（在手动批准后执行）
-deploy-production-execute:
-  stage: deploy-prod
+deploy:staging:
+  stage: deploy:staging
   image: bitnami/kubectl:latest
-  script:
-    - echo "🚀 执行生产环境部署..."
-    
-    # 设置kubectl上下文
-    - kubectl config use-context $K8S_CONTEXT
-    
-    # 备份当前版本（用于回滚）
-    - kubectl get deployment edams-gateway -n $K8S_NAMESPACE_PROD -o yaml > edams-gateway-backup.yaml
-    - kubectl get deployment edams-auth -n $K8S_NAMESPACE_PROD -o yaml > edams-auth-backup.yaml
-    
-    # 更新生产环境镜像
-    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
-    - kubectl set image deployment/edams-auth edams-auth=$REGISTRY_URL/$CI_PROJECT_PATH/edams-auth:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
-    
-    # 执行金丝雀发布（逐步更新）
-    - echo "🐦 执行金丝雀发布..."
-    - kubectl rollout pause deployment/edams-gateway -n $K8S_NAMESPACE_PROD
-    - kubectl set image deployment/edams-gateway edams-gateway=$REGISTRY_URL/$CI_PROJECT_PATH/edams-gateway:$IMAGE_TAG -n $K8S_NAMESPACE_PROD
-    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_PROD
-    - kubectl rollout resume deployment/edams-gateway -n $K8S_NAMESPACE_PROD
-    
-    # 等待部署完成
-    - kubectl rollout status deployment/edams-gateway -n $K8S_NAMESPACE_PROD --timeout=600s
-    - kubectl rollout status deployment/edams-auth -n $K8S_NAMESPACE_PROD --timeout=600s
-    
-    # 验证生产环境部署
-    - echo "✅ 验证生产环境..."
-    - kubectl get pods -n $K8S_NAMESPACE_PROD -l app=edams-gateway
-    - kubectl get pods -n $K8S_NAMESPACE_PROD -l app=edams-auth
-    
-    # 健康检查
-    - timeout 300 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://api.edams.com/api/health)" != "200" ]]; do sleep 5; done'
-    
-    - echo "✅ 生产环境部署完成"
   environment:
-    name: production
-    url: https://api.edams.com
-  dependencies:
-    - deploy-production
+    name: staging
+    url: https://edams-staging.example.com
+    on_stop: rollback:staging
+  before_script:
+    - kubectl config use-context staging-cluster
+  script:
+    - |
+      echo "Deploying to staging environment..."
+      helm upgrade --install edams ./charts/edams \
+        --namespace edams-staging \
+        --create-namespace \
+        --set image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set image.repository=${DOCKER_REGISTRY}/edams \
+        --set frontend.image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set frontend.image.repository=${DOCKER_REGISTRY}/edams-frontend \
+        --values ./charts/edams/values-staging.yaml \
+        --wait --timeout 15m
+      kubectl rollout status deployment/edams-gateway -n edams-staging
   only:
     - main
-  tags:
-    - kubernetes
-    - production
+  when: manual
+
+rollback:staging:
+  stage: deploy:staging
+  image: bitnami/kubectl:latest
+  environment:
+    name: staging
+    action: stop
+  script:
+    - kubectl config use-context staging-cluster
+    - helm rollback edams -n edams-staging
+  only:
+    - main
+  when: manual
+
+deploy:prod:
+  stage: deploy:prod
+  image: bitnami/kubectl:latest
+  environment:
+    name: production
+    url: https://edams.example.com
+    on_stop: rollback:prod
+  before_script:
+    - kubectl config use-context prod-cluster
+  script:
+    - |
+      echo "Deploying to production environment..."
+      # 蓝绿部署准备
+      kubectl get namespaces | grep edams-prod || kubectl create namespace edams-prod
+      helm upgrade --install edams ./charts/edams \
+        --namespace edams-prod \
+        --create-namespace \
+        --set image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set image.repository=${DOCKER_REGISTRY}/edams \
+        --set frontend.image.tag=${CI_COMMIT_SHORT_SHA} \
+        --set frontend.image.repository=${DOCKER_REGISTRY}/edams-frontend \
+        --values ./charts/edams/values-prod.yaml \
+        --wait --timeout 20m
+      # 灰度验证
+      kubectl rollout status deployment/edams-gateway -n edams-prod
+      # 发送通知
+      curl -X POST "https://oapi.dingtalk.com/robot/send?access_token=${DINGTALK_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"msgtype":"text","text":{"content":"EDAMS生产环境部署完成: '${CI_COMMIT_SHORT_SHA}'"}}'
+  only:
+    - main
+  when: manual
+  delay: 0
+
+rollback:prod:
+  stage: deploy:prod
+  image: bitnami/kubectl:latest
+  environment:
+    name: production
+    action: stop
+  script:
+    - kubectl config use-context prod-cluster
+    - helm rollback edams -n edams-prod
+  only:
+    - main
+  when: manual
 
 # =====================================================
-# 阶段12: 通知
+# 通知阶段
 # =====================================================
 
-notify-slack:
-  stage: notify
+notify:success:
+  stage: .post
   image: curlimages/curl:latest
   script:
-    # 通知Slack
-    - echo "📢 发送通知到Slack..."
     - |
-      if [ "$CI_JOB_STATUS" = "success" ]; then
-        MESSAGE="✅ Pipeline成功完成！\n项目: $CI_PROJECT_TITLE\n分支: $CI_COMMIT_REF_NAME\n提交: $CI_COMMIT_TITLE\n流水线: $CI_PIPELINE_URL"
-      else
-        MESSAGE="❌ Pipeline失败！\n项目: $CI_PROJECT_TITLE\n分支: $CI_COMMIT_REF_NAME\n提交: $CI_COMMIT_TITLE\n失败阶段: $CI_JOB_NAME\n流水线: $CI_PIPELINE_URL"
+      echo "Pipeline completed successfully!"
+      if [ -n "${DINGTALK_TOKEN}" ]; then
+        curl -X POST "https://oapi.dingtalk.com/robot/send?access_token=${DINGTALK_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "msgtype": "markdown",
+            "markdown": {
+              "title": "EDAMS CI/CD Pipeline",
+              "text": "## 构建成功 ✅\n\n- **项目**: EDAMS\n- **分支**: '${CI_COMMIT_REF_NAME}'\n- **提交**: '${CI_COMMIT_SHORT_SHA}'\n- **Pipeline**: ['${CI_PIPELINE_URL}'](${CI_PIPELINE_URL})"
+            }
+          }'
       fi
-      
-      curl -X POST $SLACK_WEBHOOK_URL \
-        -H 'Content-type: application/json' \
-        --data "{\"text\":\"$MESSAGE\"}"
-    - echo "✅ 通知发送完成"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   when: always
-  tags:
-    - notify
 
-notify-email:
-  stage: notify
-  image: alpine/curl:latest
-  script:
-    # 发送邮件通知
-    - echo "📧 发送邮件通知..."
-    # 这里可以集成邮件服务
-    - echo "✅ 邮件通知准备就绪"
-  when: on_failure
-  tags:
-    - notify
-
-# =====================================================
-# 清理任务
-# =====================================================
-
-cleanup:
+notify:failure:
   stage: .post
+  image: curlimages/curl:latest
   script:
-    - echo "🧹 清理工作空间..."
-    # 清理Docker缓存
-    - docker system prune -f
-  when: always
-  tags:
-    - cleanup
+    - |
+      echo "Pipeline failed!"
+      if [ -n "${DINGTALK_TOKEN}" ]; then
+        curl -X POST "https://oapi.dingtalk.com/robot/send?access_token=${DINGTALK_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "msgtype": "markdown",
+            "markdown": {
+              "title": "EDAMS CI/CD Pipeline Failed",
+              "text": "## 构建失败 ❌\n\n- **项目**: EDAMS\n- **分支**: '${CI_COMMIT_REF_NAME}'\n- **提交**: '${CI_COMMIT_SHORT_SHA}'\n- **Pipeline**: ['${CI_PIPELINE_URL}'](${CI_PIPELINE_URL})"
+            }
+          }'
+      fi
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: on_failure

@@ -1,0 +1,28 @@
+{
+  "name": "_auto_1e1f5472c3d24ae388d35696d044850a",
+  "leadAgentId": "1e1f5472c3d24ae388d35696d044850a",
+  "workspacePath": "e:\\GitCode\\enterprise-data-system",
+  "createdAt": "2026-04-11T01:54:19.345Z",
+  "options": {
+    "workspacePath": "e:\\GitCode\\enterprise-data-system",
+    "isAutoTeam": true
+  },
+  "members": [
+    {
+      "memberId": "team-lead@_auto_1e1f5472c3d24ae388d35696d044850a",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "frontend-dev@_auto_1e1f5472c3d24ae388d35696d044850a",
+      "name": "frontend-dev",
+      "role": "前端页面和services层补全"
+    },
+    {
+      "memberId": "test-dev@_auto_1e1f5472c3d24ae388d35696d044850a",
+      "name": "test-dev",
+      "role": "SkyWalking配置+单元测试补全"
+    }
+  ],
+  "isAutoTeam": true
+}

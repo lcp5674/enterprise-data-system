@@ -1,0 +1,38 @@
+{
+  "name": "edams-fix-team",
+  "leadAgentId": "1e1f5472c3d24ae388d35696d044850a",
+  "workspacePath": "e:/GitCode/enterprise-data-system",
+  "createdAt": "2026-04-10T13:52:56.326Z",
+  "options": {
+    "workspacePath": "e:/GitCode/enterprise-data-system",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@edams-fix-team",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "team-b-metadata@edams-fix-team",
+      "name": "team-b-metadata",
+      "role": "团队B：实现 Metadata Service"
+    },
+    {
+      "memberId": "team-c-portal@edams-fix-team",
+      "name": "team-c-portal",
+      "role": "团队C：修复lineage配置+Portal Service+Admin Service+前端页面"
+    },
+    {
+      "memberId": "team-a-gateway@edams-fix-team",
+      "name": "team-a-gateway",
+      "role": "团队A：API Gateway + edams-asset修复"
+    },
+    {
+      "memberId": "team-d-tests@edams-fix-team",
+      "name": "team-d-tests",
+      "role": "团队D：单元测试补全+SkyWalking+Index Service"
+    }
+  ],
+  "isAutoTeam": false
+}
