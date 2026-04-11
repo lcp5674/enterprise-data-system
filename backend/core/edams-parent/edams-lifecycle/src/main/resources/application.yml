@@ -1,0 +1,86 @@
+spring:
+  application:
+    name: edams-lifecycle
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+        group: EDAMS_GROUP
+        file-extension: yml
+        refresh-enabled: true
+
+server:
+  port: 8086
+  servlet:
+    context-path: /edams-lifecycle
+
+# 数据库配置
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root123456}
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.lifecycle.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+# 生命周期配置
+lifecycle:
+  # 默认生命周期阶段
+  default-stages:
+    - code: CREATED
+      name: 创建阶段
+      description: 数据资产创建阶段
+      duration-days: 7
+      next-stage: DEVELOPMENT
+    - code: DEVELOPMENT
+      name: 开发阶段
+      description: 数据资产开发阶段
+      duration-days: 30
+      next-stage: MATURITY
+    - code: MATURITY
+      name: 成熟阶段
+      description: 数据资产成熟阶段
+      duration-days: 365
+      next-stage: DECAY
+    - code: DECAY
+      name: 衰退阶段
+      description: 数据资产衰退阶段
+      duration-days: 90
+      next-stage: ARCHIVED
+    - code: ARCHIVED
+      name: 归档阶段
+      description: 数据资产归档阶段
+      duration-days: 730
+      next-stage: DESTROYED
+    - code: DESTROYED
+      name: 销毁阶段
+      description: 数据资产销毁阶段
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.enterprise.edams: DEBUG

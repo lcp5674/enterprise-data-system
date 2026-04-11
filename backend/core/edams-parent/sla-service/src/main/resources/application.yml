@@ -1,0 +1,93 @@
+server:
+  port: 8085
+  servlet:
+    context-path: /sla
+
+spring:
+  application:
+    name: sla-service
+  
+  datasource:
+    url: jdbc:mysql://localhost:3306/edams_sla?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  
+  redis:
+    host: localhost
+    port: 6379
+    database: 5
+  
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: sla-group
+  
+  elasticsearch:
+    uris: http://localhost:9200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.edams.sla: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+  file:
+    name: logs/sla-service.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+  hystrix:
+    enabled: true
+
+hystrix:
+  command:
+    default:
+      execution:
+        isolation:
+          thread:
+            timeoutInMilliseconds: 10000
+
+ribbon:
+  ConnectTimeout: 5000
+  ReadTimeout: 10000
+  OkToRetryOnAllOperations: false
+  MaxAutoRetries: 0
+  MaxAutoRetriesNextServer: 1
+  ServerListRefreshInterval: 2000
+
+sla:
+  config:
+    monitoring-interval: 60  # 监控间隔秒数
+    report-generation:
+      daily: "00:00"
+      weekly: "00:00"
+      monthly: "00:00"
+    notification:
+      email-template: "sla-report-template.html"
+      alert-threshold: 0.95  # 警报阈值
+    violation:
+      check-interval: 300  # 违规检查间隔秒数

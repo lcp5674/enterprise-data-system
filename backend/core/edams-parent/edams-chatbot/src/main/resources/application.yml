@@ -1,0 +1,79 @@
+server:
+  port: 8021
+
+spring:
+  application:
+    name: edams-chatbot
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/edams_chatbot?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: root123456
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 
+      database: 7
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: edams-chatbot
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# Nacos配置
+nacos:
+  discovery:
+    server-addr: localhost:8848
+    namespace: public
+  config:
+    server-addr: localhost:8848
+    namespace: public
+    file-extension: yml
+
+# Sentinel配置
+sentinel:
+  transport:
+    dashboard: localhost:8080
+  eager: true
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.enterprise.edams.chatbot.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Swagger配置
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# Chatbot配置
+chatbot:
+  context:
+    ttl-hours: 24
+  intent:
+    confidence-threshold: 0.6
+  response:
+    max-length: 2000
+
+# 日志配置
+logging:
+  level:
+    com.enterprise.edams.chatbot: DEBUG
+    com.enterprise.edams.common: INFO

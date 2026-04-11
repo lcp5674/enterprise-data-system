@@ -1,0 +1,43 @@
+{
+  "name": "edams-fullstack-team",
+  "leadAgentId": "1e1f5472c3d24ae388d35696d044850a",
+  "workspacePath": "e:/GitCode/enterprise-data-system",
+  "createdAt": "2026-04-11T14:07:51.550Z",
+  "options": {
+    "workspacePath": "e:/GitCode/enterprise-data-system",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@edams-fullstack-team",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "p2-dev-lead@edams-fullstack-team",
+      "name": "p2-dev-lead",
+      "role": "P2服务完善"
+    },
+    {
+      "memberId": "p3-knowledge-llm-dev@edams-fullstack-team",
+      "name": "p3-knowledge-llm-dev",
+      "role": "P3 knowledge/llm服务"
+    },
+    {
+      "memberId": "p3-lifecycle-collab-dev@edams-fullstack-team",
+      "name": "p3-lifecycle-collab-dev",
+      "role": "P3 lifecycle/collaboration服务"
+    },
+    {
+      "memberId": "p3-aiops-chatbot-dev@edams-fullstack-team",
+      "name": "p3-aiops-chatbot-dev",
+      "role": "P3 aiops/chatbot服务"
+    },
+    {
+      "memberId": "p3-small-services-dev@edams-fullstack-team",
+      "name": "p3-small-services-dev",
+      "role": "P3 6个小服务批量实现"
+    }
+  ],
+  "isAutoTeam": false
+}

@@ -93,6 +93,8 @@
         <!-- 运维服务 -->
         <module>edams-monitor</module>
         <module>edams-scheduler</module>
+        <module>edams-aiops</module>
+        <module>edams-chatbot</module>
     </modules>
 
     <dependencyManagement>
