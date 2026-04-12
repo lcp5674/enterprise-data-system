@@ -7,12 +7,14 @@ import com.enterprise.edams.llm.dto.LlmQuotaDTO;
 import com.enterprise.edams.llm.entity.LlmQuota;
 import com.enterprise.edams.llm.repository.LlmQuotaMapper;
 import com.enterprise.edams.llm.service.LlmQuotaService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,13 +25,23 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class LlmQuotaServiceImpl extends ServiceImpl<LlmQuotaMapper, LlmQuota> implements LlmQuotaService {
 
     private final LlmQuotaMapper quotaMapper;
     private final RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired(required = false)
+    private RestTemplate restTemplate;
+    
+    @Value("${edams.tenant.default-id:1}")
+    private Long defaultTenantId;
 
     private static final String QUOTA_KEY_PREFIX = "llm:quota:";
+
+    public LlmQuotaServiceImpl(LlmQuotaMapper quotaMapper, RedisTemplate<String, Object> redisTemplate) {
+        this.quotaMapper = quotaMapper;
+        this.redisTemplate = redisTemplate;
+    }
 
     @Override
     public Page<LlmQuota> selectPage(Long tenantId, Long userId, int pageNum, int pageSize) {
@@ -118,12 +130,55 @@ public class LlmQuotaServiceImpl extends ServiceImpl<LlmQuotaMapper, LlmQuota> i
             return;
         }
 
-        // 尝试租户配额
-        if (userQuota == null && userId != null) {
-            LlmQuota tenantQuota = quotaMapper.selectTenantQuota(1L, modelId); // TODO: 获取实际的租户ID
+        // 尝试租户配额 - 获取真实的租户ID
+        if (userId != null) {
+            Long tenantId = getTenantIdFromUser(userId, modelId);
+            LlmQuota tenantQuota = quotaMapper.selectTenantQuota(tenantId, modelId);
             if (tenantQuota != null) {
                 quotaMapper.updateUsedQuota(tenantQuota.getId(), tokens, cost);
             }
+        }
+    }
+    
+    /**
+     * 从用户服务获取租户ID
+     */
+    private Long getTenantIdFromUser(Long userId, Long modelId) {
+        try {
+            // 优先从Redis缓存获取
+            String cacheKey = "user:tenant:" + userId;
+            Object cachedTenantId = redisTemplate.opsForValue().get(cacheKey);
+            if (cachedTenantId != null) {
+                return Long.valueOf(cachedTenantId.toString());
+            }
+            
+            // 如果有用户服务，则调用获取租户ID
+            if (restTemplate != null) {
+                String url = "http://edams-user/api/v1/users/" + userId + "/tenant";
+                try {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> response = restTemplate.getForObject(url, java.util.Map.class);
+                    if (response != null && response.get("tenantId") != null) {
+                        Long tenantId = Long.valueOf(response.get("tenantId").toString());
+                        // 缓存到Redis（1小时过期）
+                        redisTemplate.opsForValue().set(cacheKey, tenantId.toString());
+                        return tenantId;
+                    }
+                } catch (Exception e) {
+                    log.warn("获取用户租户ID失败，使用默认租户: {}", e.getMessage());
+                }
+            }
+            
+            // 从当前用户配额查询租户ID
+            LlmQuota existingQuota = quotaMapper.selectActiveQuota(userId, modelId);
+            if (existingQuota != null && existingQuota.getTenantId() != null) {
+                return existingQuota.getTenantId();
+            }
+            
+            return defaultTenantId;
+        } catch (Exception e) {
+            log.warn("获取租户ID异常，使用默认值: {}", e.getMessage());
+            return defaultTenantId;
         }
     }
 

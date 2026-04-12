@@ -433,14 +433,111 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * MFA验证码校验（简化版 - 实际应集成TOTP库）
+     * MFA验证码校验（使用TOTP算法）
      */
     private boolean verifyMfaCode(User user, String mfaCode) {
         if (mfaCode == null || mfaCode.length() != 6) {
             return false;
         }
-        // TODO: 集成TOTP库进行真正的MFA验证
-        // 这里简化处理：生产环境应使用Google Authenticator等标准方案
-        return true;
+        
+        // 从用户表获取MFA密钥
+        String secret = user.getMfaSecret();
+        if (secret == null || secret.isEmpty()) {
+            log.warn("用户 {} 未配置MFA密钥", user.getUsername());
+            return false;
+        }
+        
+        // 使用TOTP算法验证验证码
+        try {
+            return verifyTOTP(secret, mfaCode);
+        } catch (Exception e) {
+            log.error("MFA验证失败: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * TOTP算法实现（基于RFC 6238）
+     */
+    private boolean verifyTOTP(String secret, String code) {
+        try {
+            // 解码Base32密钥
+            byte[] key = base32Decode(secret.toUpperCase());
+            
+            // 获取当前时间窗口（30秒）
+            long time = System.currentTimeMillis() / 1000 / 30;
+            
+            // 验证当前窗口和前后各一个窗口（允许时钟偏移）
+            for (int i = -1; i <= 1; i++) {
+                String expectedCode = generateTOTP(key, time + i);
+                if (expectedCode.equals(code)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.error("TOTP验证异常: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 生成TOTP验证码
+     */
+    private String generateTOTP(byte[] key, long time) {
+        try {
+            byte[] data = new byte[8];
+            for (int i = 7; i >= 0; i--) {
+                data[i] = (byte) (time & 0xff);
+                time >>= 8;
+            }
+            
+            // 使用HMAC-SHA1
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA1");
+            mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA1"));
+            byte[] hash = mac.doFinal(data);
+            
+            // 动态截断
+            int offset = hash[hash.length - 1] & 0x0f;
+            int binary = ((hash[offset] & 0x7f) << 24) 
+                       | ((hash[offset + 1] & 0xff) << 16)
+                       | ((hash[offset + 2] & 0xff) << 8)
+                       | (hash[offset + 3] & 0xff);
+            
+            int otp = binary % 1000000;
+            return String.format("%06d", otp);
+        } catch (Exception e) {
+            throw new RuntimeException("TOTP生成失败", e);
+        }
+    }
+    
+    /**
+     * Base32解码
+     */
+    private byte[] base32Decode(String encoded) {
+        final String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+        encoded = encoded.replace("=", "");
+        
+        int bytes = (encoded.length() * 5) / 8;
+        byte[] result = new byte[bytes];
+        
+        int buffer = 0;
+        int bitsLeft = 0;
+        int index = 0;
+        
+        for (char c : encoded.toCharArray()) {
+            int value = alphabet.indexOf(c);
+            if (value < 0) continue;
+            
+            buffer = (buffer << 5) | value;
+            bitsLeft += 5;
+            
+            if (bitsLeft >= 8) {
+                bitsLeft -= 8;
+                result[index++] = (byte) (buffer >> bitsLeft);
+            }
+        }
+        
+        return result;
     }
 }
