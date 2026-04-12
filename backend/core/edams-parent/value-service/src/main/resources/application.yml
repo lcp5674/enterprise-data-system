@@ -1,5 +1,5 @@
 server:
-  port: 8086
+  port: 8093
   servlet:
     context-path: /value
 
@@ -17,23 +17,6 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-        dialect: org.hibernate.dialect.MySQL8Dialect
-  
-  redis:
-    host: localhost
-    port: 6379
-    database: 6
-  
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: value-group
-  
-  elasticsearch:
-    uris: http://localhost:9200
 
 management:
   endpoints:
@@ -48,42 +31,7 @@ logging:
   level:
     com.edams.value: DEBUG
     org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
   file:
     name: logs/value-service.log
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-
-feign:
-  client:
-    config:
-      default:
-        connectTimeout: 5000
-        readTimeout: 10000
-  hystrix:
-    enabled: true
-
-hystrix:
-  command:
-    default:
-      execution:
-        isolation:
-          thread:
-            timeoutInMilliseconds: 10000
-
-ribbon:
-  ConnectTimeout: 5000
-  ReadTimeout: 10000
-  OkToRetryOnAllOperations: false
-  MaxAutoRetries: 0
-  MaxAutoRetriesNextServer: 1
-  ServerListRefreshInterval: 2000
-
-value:
-  config:
-    assessment-methods:
-      ai: true
-      manual: true
-      hybrid: true
-    default-validity-period: 30
-    trend-calculation-interval: 3600  # 每小时计算趋势

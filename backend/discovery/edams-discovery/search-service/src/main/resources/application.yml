@@ -1,0 +1,34 @@
+server:
+  port: 8103
+  servlet:
+    context-path: /search
+
+spring:
+  application:
+    name: search-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edams_search
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  elasticsearch:
+    uris: http://localhost:9200
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.enterprise.edams.search: DEBUG
+  file:
+    name: logs/search-service.log

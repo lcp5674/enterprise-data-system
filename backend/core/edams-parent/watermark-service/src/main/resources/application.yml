@@ -1,0 +1,39 @@
+server:
+  port: 8096
+
+spring:
+  application:
+    name: watermark-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edams_watermark
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.edams.watermark: DEBUG
+  file:
+    name: logs/watermark-service.log

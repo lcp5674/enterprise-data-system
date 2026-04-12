@@ -1,0 +1,36 @@
+server:
+  port: 8101
+  servlet:
+    context-path: /catalog
+
+spring:
+  application:
+    name: catalog-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edams_catalog
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  redis:
+    host: localhost
+    port: 6379
+    database: 10
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.enterprise.edams.catalog: DEBUG
+  file:
+    name: logs/catalog-service.log

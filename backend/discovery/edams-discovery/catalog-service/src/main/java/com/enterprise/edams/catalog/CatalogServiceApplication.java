@@ -1,16 +1,14 @@
 package com.enterprise.edams.catalog;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
-/**
- * 数据目录服务启动类
- */
-@SpringBootApplication(scanBasePackages = "com.enterprise.edams")
+@SpringBootApplication
 @EnableDiscoveryClient
+@MapperScan("com.enterprise.edams.catalog.mapper")
 public class CatalogServiceApplication {
-
     public static void main(String[] args) {
         SpringApplication.run(CatalogServiceApplication.class, args);
     }

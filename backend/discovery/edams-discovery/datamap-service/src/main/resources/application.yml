@@ -1,0 +1,31 @@
+server:
+  port: 8102
+  servlet:
+    context-path: /datamap
+
+spring:
+  application:
+    name: datamap-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edams_datamap
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.enterprise.edams.datamap: DEBUG
+  file:
+    name: logs/datamap-service.log

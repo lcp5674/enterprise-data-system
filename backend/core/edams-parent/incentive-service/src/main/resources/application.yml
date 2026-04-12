@@ -1,0 +1,38 @@
+server:
+  port: 8097
+
+spring:
+  application:
+    name: incentive-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/edams_incentive
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+  redis:
+    host: localhost
+    port: 6379
+    database: 9
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.edams.incentive: DEBUG
+  file:
+    name: logs/incentive-service.log
