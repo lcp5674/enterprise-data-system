@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.enterprise.edams.common.exception.BusinessException;
+import com.enterprise.edams.common.feign.UserFeignClient;
 import com.enterprise.edams.workflow.entity.ApprovalTask;
 import com.enterprise.edams.workflow.entity.WorkflowDefinition;
 import com.enterprise.edams.workflow.entity.WorkflowInstance;
@@ -13,11 +14,15 @@ import com.enterprise.edams.workflow.repository.WorkflowInstanceMapper;
 import com.enterprise.edams.workflow.service.ApprovalService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
+import org.flowable.engine.runtime.ProcessInstance as FlowableProcessInstance;
+import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 审批服务实现
@@ -33,6 +38,9 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final WorkflowInstanceMapper instanceMapper;
     private final WorkflowDefinitionMapper definitionMapper;
     private final ApprovalTaskMapper taskMapper;
+    private final RuntimeService runtimeService;
+    private final TaskService taskService;
+    private final UserFeignClient userFeignClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -44,7 +52,22 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new BusinessException("流程定义不存在或未发布");
         }
 
-        // 2. 创建流程实例
+        // 2. 获取发起人信息
+        String initiatorName = "用户" + initiatorId;
+        String initiatorDept = "未知部门";
+        try {
+            var userInfo = userFeignClient.getUserById(initiatorId);
+            if (userInfo != null) {
+                initiatorName = userInfo.getRealName() != null ? userInfo.getRealName() : userInfo.getUsername();
+                if (userInfo.getDepartmentName() != null) {
+                    initiatorDept = userInfo.getDepartmentName();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("获取用户信息失败, userId={}: {}", initiatorId, e.getMessage());
+        }
+
+        // 3. 创建流程实例
         WorkflowInstance instance = new WorkflowInstance();
         instance.setDefinitionId(definitionId);
         instance.setProcessDefKey(def.getCode());
@@ -52,47 +75,91 @@ public class ApprovalServiceImpl implements ApprovalService {
         instance.setBusinessType(def.getType());
         instance.setBusinessKey(UUID.randomUUID().toString().replace("-", "").substring(0, 16));
         instance.setInitiatorId(initiatorId);
-        // TODO: 从用户服务获取发起人姓名和部门
-        instance.setInitiatorName("用户" + initiatorId);
-        instance.setInitiatorDept("未知部门");
+        instance.setInitiatorName(initiatorName);
+        instance.setInitiatorDept(initiatorDept);
         instance.setCurrentNodeName("开始");
         instance.setStatus(0); // 运行中
         instance.setPriority(1);
         instance.setFormData(formData);
 
-        // 模拟Flowable启动流程
-        instance.setProcessInstanceId("PROC-" + System.currentTimeMillis());
+        // 4. 启动Flowable流程
+        try {
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("initiatorId", initiatorId);
+            variables.put("initiatorName", initiatorName);
+            variables.put("businessTitle", businessTitle);
+
+            FlowableProcessInstance flowableInstance = runtimeService
+                    .startProcessInstanceByKey(def.getCode(), instance.getBusinessKey(), variables);
+
+            instance.setProcessInstanceId(flowableInstance.getId());
+            log.info("Flowable流程实例已启动: {}", flowableInstance.getId());
+
+            // 查找第一个用户任务并创建审批任务记录
+            createApprovalTasksFromFlowable(instance.getId(), flowableInstance.getId());
+
+        } catch (Exception e) {
+            log.error("Flowable流程启动失败: {}", e.getMessage(), e);
+            throw new BusinessException("流程启动失败: " + e.getMessage());
+        }
 
         instanceMapper.insert(instance);
-
-        // 3. 创建第一个审批任务（模拟）
-        createFirstApprovalTask(instance.getId(), initiatorId);
 
         log.info("流程实例已启动: {} - {} ({})", def.getCode(), businessTitle, instance.getId());
         return instance;
     }
 
-    /** 创建第一个审批任务 */
-    private void createFirstApprovalTask(Long instanceId, Long initiatorId) {
-        // 这里简化处理：实际应根据BPMN定义创建对应的审批节点任务
-        ApprovalTask task = new ApprovalTask();
-        task.setInstanceId(instanceId);
-        task.setFlowableTaskId("TASK-" + UUID.randomUUID().toString().substring(0, 8));
-        task.setTaskName("部门经理审批"); // 第一个节点名称
-        task.setTaskDefKey("dept_manager_approve");
-        // TODO: 根据业务逻辑确定实际的处理人
-        task.setAssigneeId(null);  // 待分配
-        task.setAssigneeName("");   // 待确定
-        task.setStatus(0);          // 待处理
+    /**
+     * 从Flowable流程实例创建审批任务记录
+     */
+    private void createApprovalTasksFromFlowable(Long instanceId, String flowableProcessInstanceId) {
+        // 查询Flowable中的用户任务
+        List<Task> tasks = taskService.createTaskQuery()
+                .processInstanceId(flowableProcessInstanceId)
+                .list();
 
-        taskMapper.insert(task);
+        for (Task task : tasks) {
+            ApprovalTask approvalTask = new ApprovalTask();
+            approvalTask.setInstanceId(instanceId);
+            approvalTask.setFlowableTaskId(task.getId());
+            approvalTask.setTaskName(task.getName());
+            approvalTask.setTaskDefKey(task.getTaskDefinitionKey());
 
-        // 更新实例的当前节点信息
-        WorkflowInstance inst = instanceMapper.selectById(instanceId);
-        if (inst != null) {
-            inst.setCurrentNodeName(task.getTaskName());
-            inst.setCurrentAssignees("[\"待分配\"]");
-            instanceMapper.updateById(inst);
+            // 获取任务候选人/办理人
+            if (task.getAssignee() != null) {
+                approvalTask.setAssigneeId(Long.parseLong(task.getAssignee()));
+                // 根据 assigneeId 查询真实姓名
+                try {
+                    var userInfo = userFeignClient.getUserById(approvalTask.getAssigneeId());
+                    if (userInfo != null) {
+                        approvalTask.setAssigneeName(
+                            userInfo.getRealName() != null ? userInfo.getRealName() : userInfo.getUsername()
+                        );
+                    }
+                } catch (Exception e) {
+                    log.warn("获取办理人信息失败: {}", e.getMessage());
+                }
+            } else if (task.getCandidates() != null && !task.getCandidates().isEmpty()) {
+                // 候选人也记录
+                approvalTask.setCurrentAssignees(
+                    new com.fasterxml.jackson.databind.ObjectMapper()
+                        .writeValueAsString(task.getCandidates())
+                );
+            }
+
+            approvalTask.setStatus(0); // 待处理
+            approvalTask.setPriority(task.getPriority());
+            approvalTask.setDueDate(task.getDueDate());
+
+            taskMapper.insert(approvalTask);
+
+            // 更新实例的当前节点
+            WorkflowInstance inst = instanceMapper.selectById(instanceId);
+            if (inst != null && approvalTask.getAssigneeId() != null) {
+                inst.setCurrentNodeName(approvalTask.getTaskName());
+                inst.setCurrentAssignees("[\"" + approvalTask.getAssigneeName() + "\"]");
+                instanceMapper.updateById(inst);
+            }
         }
     }
 
@@ -240,11 +307,35 @@ public class ApprovalServiceImpl implements ApprovalService {
         ApprovalTask task = taskMapper.selectById(taskId);
         if (task == null || task.getStatus() != 0) throw new BusinessException("任务不可转办");
 
+        // 获取目标用户真实姓名
+        String toUserName = "用户" + toUserId;
+        String fromUserName = "用户" + fromUserId;
+        try {
+            var toUserInfo = userFeignClient.getUserById(toUserId);
+            if (toUserInfo != null) {
+                toUserName = toUserInfo.getRealName() != null ? toUserInfo.getRealName() : toUserInfo.getUsername();
+            }
+            var fromUserInfo = userFeignClient.getUserById(fromUserId);
+            if (fromUserInfo != null) {
+                fromUserName = fromUserInfo.getRealName() != null ? fromUserInfo.getRealName() : fromUserInfo.getUsername();
+            }
+        } catch (Exception e) {
+            log.warn("获取用户信息失败: {}", e.getMessage());
+        }
+
         task.setAssigneeId(toUserId);
-        task.setAssigneeName("用户" + toUserId); // TODO: 从用户服务查询真实姓名
+        task.setAssigneeName(toUserName);
+
+        // 在Flowable中转办
+        try {
+            taskService.delegateTask(task.getFlowableTaskId(), String.valueOf(toUserId));
+        } catch (Exception e) {
+            log.warn("Flowable任务转办失败，使用本地记录: {}", e.getMessage());
+        }
+
         // 保留原处理人信息在comment中
         task.setComment((task.getComment() != null ? task.getComment() + "\n" : "") +
-                        "转办自用户" + fromUserId + ": " + (comment != null ? comment : ""));
+                        "转办自【" + fromUserName + "(" + fromUserId + ")】: " + (comment != null ? comment : ""));
         taskMapper.updateById(task);
 
         log.info("任务{}已从用户{}转办给用户{}", taskId, fromUserId, toUserId);

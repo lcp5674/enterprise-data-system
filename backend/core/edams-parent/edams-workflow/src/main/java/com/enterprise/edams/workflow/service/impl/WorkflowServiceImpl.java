@@ -9,6 +9,9 @@ import com.enterprise.edams.workflow.repository.WorkflowDefinitionMapper;
 import com.enterprise.edams.workflow.service.WorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.repository.DeploymentBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +29,7 @@ import java.util.List;
 public class WorkflowServiceImpl implements WorkflowService {
 
     private final WorkflowDefinitionMapper definitionMapper;
+    private final RepositoryService repositoryService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -55,16 +59,44 @@ public class WorkflowServiceImpl implements WorkflowService {
         WorkflowDefinition def = definitionMapper.selectById(definitionId);
         if (def == null || def.getDeleted() == 1) throw new BusinessException("流程定义不存在");
 
-        // TODO: 实际应调用Flowable RepositoryService部署BPMN XML
-        log.info("模拟部署Flowable流程: {}", def.getCode());
+        // 获取BPMN内容
+        String bpmnContent = def.getBpmnContent();
+        if (bpmnContent == null || bpmnContent.isEmpty()) {
+            throw new BusinessException("流程BPMN内容为空，请先设计流程");
+        }
 
-        def.setStatus(1); // 已发布
-        def.setProcessDefKey(def.getCode());
-        def.setUpdatedBy(operator);
-        definitionMapper.updateById(def);
+        try {
+            // 使用Flowable RepositoryService部署BPMN XML
+            DeploymentBuilder deploymentBuilder = repositoryService.createDeployment()
+                    .name(def.getName())
+                    .key(def.getCode())
+                    .category(def.getDescription());
 
-        log.info("流程定义已发布: {}", definitionId);
-        return def;
+            // 根据内容类型判断：如果是XML字符串，直接添加；如果是BPMN文件路径，则读取文件
+            if (bpmnContent.trim().startsWith("<?xml") || bpmnContent.trim().startsWith("<")) {
+                deploymentBuilder.addString(def.getCode() + ".bpmn20.xml", bpmnContent);
+            } else {
+                // 尝试作为classpath资源加载
+                deploymentBuilder.addClasspathResource(bpmnContent);
+            }
+
+            Deployment deployment = deploymentBuilder.deploy();
+
+            // 更新流程定义信息
+            def.setProcessDefKey(deployment.getKey());
+            def.setProcessDefId(deployment.getId());
+            def.setStatus(1); // 已发布
+            def.setPublishedTime(java.time.LocalDateTime.now());
+            def.setUpdatedBy(operator);
+            definitionMapper.updateById(def);
+
+            log.info("流程定义已发布到Flowable引擎: {} -> deploymentId={}", definitionId, deployment.getId());
+            return def;
+
+        } catch (Exception e) {
+            log.error("Flowable部署失败: {}", e.getMessage(), e);
+            throw new BusinessException("Flowable部署失败: " + e.getMessage());
+        }
     }
 
     @Override

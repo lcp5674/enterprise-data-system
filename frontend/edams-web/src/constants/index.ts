@@ -291,11 +291,21 @@ export const API_PATHS = {
 
   // 工作流相关
   WORKFLOW: {
-    APPROVALS: '/api/v1/workflows/approvals',
+    // 审批相关API
+    APPROVALS: '/api/v1/approvals/my/pending',
+    MY_INITIATED: '/api/v1/approvals/my/initiated',
+    APPROVAL_DETAIL: (instanceId: string) => `/api/v1/approvals/${instanceId}`,
+    APPROVAL_CANCEL: (instanceId: string) => `/api/v1/approvals/${instanceId}/cancel`,
+    // 流程定义API
+    LIST: '/api/v1/workflows',
     DETAIL: (instanceId: string) => `/api/v1/workflows/${instanceId}`,
+    CREATE: '/api/v1/workflows',
+    UPDATE: (id: string) => `/api/v1/workflows/${id}`,
+    DEPLOY: (id: string) => `/api/v1/workflows/${id}/deploy`,
     APPROVE: (instanceId: string) => `/api/v1/workflows/${instanceId}/approve`,
     REJECT: (instanceId: string) => `/api/v1/workflows/${instanceId}/reject`,
     HISTORY: (instanceId: string) => `/api/v1/workflows/${instanceId}/history`,
+    CANCEL: (instanceId: string) => `/api/v1/workflows/${instanceId}/cancel`,
   },
 
   // 治理相关
