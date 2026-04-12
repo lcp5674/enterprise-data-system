@@ -89,6 +89,24 @@
     ],
     "1e1f5472c3d24ae388d35696d044850a": [
       {
+        "expertId": "SeniorDeveloper",
+        "name": "Will",
+        "profession": "高级开发工程师",
+        "avatarUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/avatars/02-Engineering/SeniorDeveloper/SeniorDeveloper.png",
+        "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/02-Engineering/SeniorDeveloper/SeniorDeveloper_zh.md",
+        "usedAt": 1776003101346,
+        "industryId": "all"
+      },
+      {
+        "expertId": "AutonomousOptimizationArchitect",
+        "name": "Dan",
+        "profession": "自主优化架构师",
+        "avatarUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/avatars/02-Engineering/AutonomousOptimizationArchitect/AutonomousOptimizationArchitect.png",
+        "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/02-Engineering/AutonomousOptimizationArchitect/AutonomousOptimizationArchitect_zh.md",
+        "usedAt": 1775985242618,
+        "industryId": "02-Engineering"
+      },
+      {
         "expertId": "CodeReviewExpert",
         "name": "Kim",
         "profession": "代码审查专家",
@@ -96,15 +114,6 @@
         "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/02-Engineering/CodeReviewExpert/CodeReviewExpert_zh.md",
         "usedAt": 1775982559845,
         "industryId": "02-Engineering"
-      },
-      {
-        "expertId": "SeniorDeveloper",
-        "name": "Will",
-        "profession": "高级开发工程师",
-        "avatarUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/avatars/02-Engineering/SeniorDeveloper/SeniorDeveloper.png",
-        "promptUrl": "https://acc-1258344699.cos.accelerate.myqcloud.com/workbuddy/experts/experts/02-Engineering/SeniorDeveloper/SeniorDeveloper_zh.md",
-        "usedAt": 1775982529850,
-        "industryId": "all"
       }
     ],
     "004b376301e84c32a144c584b3cb0a80": [
@@ -152,5 +161,5 @@
       }
     ]
   },
-  "lastUpdated": 1775984269583
+  "lastUpdated": 1776003135380
 }

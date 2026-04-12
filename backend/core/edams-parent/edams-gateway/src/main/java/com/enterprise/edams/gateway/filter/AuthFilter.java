@@ -48,8 +48,9 @@ public class AuthFilter implements GlobalFilter, Ordered {
 
     /**
      * JWT密钥（与auth服务保持一致）
+     * ⚠️ 警告：此值必须通过环境变量 JWT_SECRET 设置，禁止硬编码！
      */
-    @Value("${jwt.secret:edams-jwt-secret-key-2026}")
+    @Value("${jwt.secret:}")
     private String jwtSecret;
 
     /**

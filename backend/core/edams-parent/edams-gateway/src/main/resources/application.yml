@@ -352,8 +352,9 @@ spring.data.redis:
   database: 0
 
 # JWT密钥配置（与auth服务保持一致）
+# ⚠️ 重要：JWT_SECRET 必须在环境变量或K8s Secret中设置，禁止使用默认值！
 jwt:
-  secret: ${JWT_SECRET:edams-jwt-secret-key-2026}
+  secret: ${JWT_SECRET:}
 
 # 网关限流配置
 gateway:

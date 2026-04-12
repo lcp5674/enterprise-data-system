@@ -17,8 +17,10 @@ public class JwtProperties {
 
     /**
      * JWT签名密钥
+     * ⚠️ 警告：此值必须通过环境变量 JWT_SECRET 设置，禁止硬编码！
+     * 生产环境建议使用至少 256位的随机密钥
      */
-    private String secret = "edams-jwt-secret-key-2026";
+    private String secret;
 
     /**
      * 访问令牌过期时间（毫秒）

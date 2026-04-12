@@ -51,8 +51,9 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 # JWT配置
+# ⚠️ 重要：JWT_SECRET 必须在环境变量或K8s Secret中设置，禁止使用默认值！
 jwt:
-  secret: ${JWT_SECRET:edams-jwt-secret-key-2026}
+  secret: ${JWT_SECRET:}
   expiration: 86400000
   refresh-expiration: 604800000
 
