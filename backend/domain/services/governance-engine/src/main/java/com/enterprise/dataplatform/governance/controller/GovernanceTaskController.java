@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/governance/tasks")
+@RequestMapping("/api/v1/governance/tasks")
 @RequiredArgsConstructor
 @Tag(name = "治理任务管理", description = "治理任务的创建、调度和执行管理")
 public class GovernanceTaskController {

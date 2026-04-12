@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/governance/policies")
+@RequestMapping("/api/v1/governance/policies")
 @RequiredArgsConstructor
 @Tag(name = "治理策略管理", description = "治理策略的CRUD和执行管理")
 public class GovernancePolicyController {

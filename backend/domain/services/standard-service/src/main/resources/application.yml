@@ -1,7 +1,6 @@
 server:
-  port: 8084
-# 注意：移除 context-path，Spring Cloud Gateway 通过 lb:// 直连服务根路径
-# 旧配置 context-path: /standard-service 已废弃，会导致路由路径错误
+  port: 8099
+# 注意：端口从8084修改为8099，避免与edams-notification(8084)冲突
 
 spring:
   application:

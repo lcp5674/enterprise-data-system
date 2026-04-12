@@ -1,4 +1,4 @@
-# EDAMS 服务端口分配表 (V1.1)
+# EDAMS 服务端口分配表 (V2.0)
 
 > 本文档定义了所有微服务的端口分配，确保无端口冲突。
 > 所有服务均不使用 context-path，通过 Spring Cloud Gateway 的 Nacos 服务发现进行路由。
@@ -40,18 +40,18 @@
 | (edge-iot-service) | - | 未实体化 |
 
 ### 域服务 domain (10个)
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| governance-engine | 8014 | 治理引擎 |
-| quality-service | 8085 | 质量检测 |
-| lineage-service | 8092 | 数据血缘 |
-| metadata-service | 8090 | 元数据管理 |
-| standard-service | 8084 | 数据标准 |
-| analytics-service | 8089 | ClickHouse分析 |
-| rule-engine-service | 8018 | Drools规则引擎 |
-| portal-service | 8093 | 工作台门户 |
-| admin-service | 8094 | 租户管理 |
-| index-service | 8095 | ES全文搜索 |
+| 服务 | 端口 | 说明 | 状态 |
+|------|------|------|------|
+| governance-engine | 8014 | 治理引擎 | ✅ |
+| **quality-service** | **8098** | 质量检测 | 🔄 已修复（从8085改为8098）|
+| lineage-service | 8092 | 数据血缘 | ✅ |
+| metadata-service | 8090 | 元数据管理 | ✅ |
+| **standard-service** | **8099** | 数据标准 | 🔄 已修复（从8084改为8099）|
+| **analytics-service** | **8100** | ClickHouse分析 | 🔄 已修复（从8089改为8100）|
+| rule-engine-service | 8018 | Drools规则引擎 | ✅ |
+| portal-service | 8093 | 工作台门户 | ✅ |
+| admin-service | 8094 | 租户管理 | ✅ |
+| **index-service** | **8106** | ES全文搜索 | 🔄 已修复（从8095改为8106）|
 
 ### 发现服务 discovery (7个)
 | 服务 | 端口 | 说明 |
@@ -60,21 +60,27 @@
 | datamap-service | 8102 | 数据地图 |
 | search-service | 8103 | 统一搜索 |
 | insight-service | 8112 | 智能洞察 |
-| metric-service | - | (共用资源) |
-| model-service | - | (共用资源) |
-| datasource-service | - | (共用资源) |
+| metric-service | - | 共用资源 |
+| model-service | - | 共用资源 |
+| datasource-service | - | 共用资源 |
 
-## 历史变更
+## 端口冲突修复历史
 
-### V1.0 (修复前)
-- 大量端口冲突 (edams-asset vs edams-user: 8082)
-- context-path 与 Controller 路径不匹配导致全部 API 404
-- 多个服务使用错误端口导致启动失败
+### V1.0 (修复前) - 8组冲突
+- edams-asset(8082) vs edams-user(8082)
+- sandbox(8084) vs edams-notification(8084)
+- sla(8085) vs edams-workflow(8085)
+- edams-analytics(8087) vs edams-collaboration(8087)
+- quality-service(8085) vs edams-workflow(8085) ❌ **未修复**
+- standard-service(8084) vs edams-notification(8084) ❌ **未修复**
+- analytics-service(8089) vs edams-user(8089) ❌ **未修复**
+- index-service(8095) vs edams-version(8095) ❌ **未修复**
 
-### V1.1 (当前)
-- 修复所有端口冲突
-- 移除所有 context-path，Spring Cloud Gateway 通过 Nacos lb:// 直连
-- 路由路径: `/api/v1/<service>/...` → StripPrefix=1 → Controller 完整匹配
+### V2.0 (2026-04-12) - 全部修复
+- quality-service: 8085 → **8098**
+- standard-service: 8084 → **8099**
+- analytics-service: 8089 → **8100**
+- index-service: 8095 → **8106**
 
 ## 路由说明
 
@@ -93,3 +99,19 @@ Controller: @RequestMapping("/api/v1/assets")
 ```
 
 **重要**: 所有服务的 @RequestMapping 必须以 `/api/v1` 开头！
+
+## API路径规范
+
+### 后端Controller规范
+- 所有Controller必须使用 `@RequestMapping("/api/v1/...")` 
+- 路径版本号必须为 `/v1`
+
+### 前端API路径规范
+- 所有API路径统一使用 `/api/v1/...` 格式
+- 不允许使用 `/auth/api/v1/...` 等额外前缀
+
+### 常见错误
+❌ `/auth/api/v1/auth/login` - 多了 `/auth` 前缀
+❌ `/api/governance/tasks` - 缺少 `/v1`
+✅ `/api/v1/auth/login`
+✅ `/api/v1/governance/tasks`

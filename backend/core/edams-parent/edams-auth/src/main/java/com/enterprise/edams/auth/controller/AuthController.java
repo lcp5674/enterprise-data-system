@@ -99,7 +99,7 @@ public class AuthController {
     /**
      * 修改密码
      */
-    @PutMapping("/password")
+    @PostMapping("/password")
     @Operation(summary = "修改密码", description = "修改当前用户的登录密码")
     public Result<Void> changePassword(
             HttpServletRequest request,

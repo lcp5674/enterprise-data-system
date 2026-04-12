@@ -1,7 +1,6 @@
 server:
-  port: 8089
-# 注意：移除 context-path，Spring Cloud Gateway 通过 lb:// 直连服务根路径
-# 旧配置 context-path: /analytics-service 已废弃，会导致路由路径错误
+  port: 8100
+# 注意：端口从8089修改为8100，避免与edams-user(8089)冲突
 
 spring:
   application:

@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/governance/ai")
+@RequestMapping("/api/v1/governance/ai")
 @RequiredArgsConstructor
 @Tag(name = "AI智能推荐", description = "基于AI的治理推荐和决策支持")
 public class AIRecommendationController {

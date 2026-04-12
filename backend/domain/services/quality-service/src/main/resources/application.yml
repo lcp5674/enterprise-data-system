@@ -1,7 +1,6 @@
 server:
-  port: 8085
-# 注意：移除 context-path，Spring Cloud Gateway 通过 lb:// 直连服务根路径
-# 旧配置 context-path: /quality-service 已废弃，会导致路由路径错误
+  port: 8098
+# 注意：端口从8085修改为8098，避免与edams-workflow(8085)冲突
 
 spring:
   application:
