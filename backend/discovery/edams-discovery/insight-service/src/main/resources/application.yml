@@ -25,7 +25,9 @@ spring:
       auto-offset-reset: earliest
 
 server:
-  port: ${SERVER_PORT:8086}
+  port: ${SERVER_PORT:8112}
+# 注意：移除 context-path，Spring Cloud Gateway 通过 lb:// 直连服务根路径
+# 原默认端口 8086 与 edams-lifecycle 冲突，改为 8112
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml

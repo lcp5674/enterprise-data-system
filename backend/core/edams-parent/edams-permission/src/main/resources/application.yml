@@ -18,8 +18,8 @@ spring:
 
 server:
   port: 8083
-  servlet:
-    context-path: /edams-permission
+# 注意：移除 context-path，因为 Spring Cloud Gateway 已通过 lb:// 路由直接访问服务根路径
+# 旧配置 context-path: /edams-permission 已废弃
 
 spring:
   datasource:

@@ -53,9 +53,10 @@ public class DatasourceConfigServiceImpl implements DatasourceConfigService {
     private final ObjectMapper objectMapper;
 
     /**
-     * AES-256-GCM加密密钥（实际应从配置中心或KMS获取）
+     * AES-256-GCM加密密钥（必须通过环境变量或K8s Secret配置）
+     * P0安全修复：移除硬编码默认密钥，要求外部注入
      */
-    @Value("${datasource.encryption.key:default-aes-256-gcm-key-32bytes!}")
+    @Value("${datasource.encryption.key}")
     private String encryptionKey;
 
     /**

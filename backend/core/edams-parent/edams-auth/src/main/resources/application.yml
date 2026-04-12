@@ -18,8 +18,8 @@ spring:
 
 server:
   port: 8081
-  servlet:
-    context-path: /edams-auth
+# 注意：移除 context-path，因为 Spring Cloud Gateway 已通过 lb:// 路由直接访问服务根路径
+# 旧配置 context-path: /edams-auth 已废弃，会导致路由路径错误
 
 # 数据库配置
 spring:

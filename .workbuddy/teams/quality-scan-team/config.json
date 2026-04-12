@@ -1,0 +1,33 @@
+{
+  "name": "quality-scan-team",
+  "leadAgentId": "1e1f5472c3d24ae388d35696d044850a",
+  "workspacePath": "e:/GitCode/enterprise-data-system",
+  "createdAt": "2026-04-12T08:01:44.961Z",
+  "options": {
+    "workspacePath": "e:/GitCode/enterprise-data-system",
+    "isAutoTeam": false
+  },
+  "members": [
+    {
+      "memberId": "team-lead@quality-scan-team",
+      "name": "team-lead",
+      "role": "Team Lead - coordinates the team and interacts with the user"
+    },
+    {
+      "memberId": "code-scanner@quality-scan-team",
+      "name": "code-scanner",
+      "role": "代码质量深度扫描"
+    },
+    {
+      "memberId": "security-scanner@quality-scan-team",
+      "name": "security-scanner",
+      "role": "数据安全与配置扫描"
+    },
+    {
+      "memberId": "test-scanner@quality-scan-team",
+      "name": "test-scanner",
+      "role": "测试覆盖率与连通性"
+    }
+  ],
+  "isAutoTeam": false
+}
