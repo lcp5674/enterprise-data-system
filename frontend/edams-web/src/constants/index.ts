@@ -108,7 +108,7 @@ export const API_PATHS = {
     CREATE: '/api/v1/assets',
     UPDATE: (id: string) => `/api/v1/assets/${id}`,
     DELETE: (id: string) => `/api/v1/assets/${id}`,
-    RESTORE: (id: string) => `/api/v1/assets/${id}/restore',
+    RESTORE: (id: string) => `/api/v1/assets/${id}/restore`,
     BATCH: '/api/v1/assets/batch',
     SEARCH: '/api/v1/assets/search',
     ADVANCED_SEARCH: '/api/v1/assets/advanced-search',
@@ -246,7 +246,7 @@ export const API_PATHS = {
     DETAIL: (id: string) => `/api/v1/permission-requests/${id}`,
     CREATE: '/api/v1/permission-requests',
     APPROVE: (id: string) => `/api/v1/permission-requests/${id}/approve`,
-    REJECT: (id: string) => `/api/v1/permission-requests/${id}/reject',
+    REJECT: (id: string) => `/api/v1/permission-requests/${id}/reject`,
     MY_LIST: '/api/v1/users/me/permission-requests',
   },
 

@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -243,10 +245,17 @@ public class AssetController {
     }
 
     /**
-     * 获取当前用户(模拟)
+     * 获取当前用户
+     * 从Spring Security上下文中获取当前认证用户
      */
     private String getCurrentUser() {
-        // TODO: 从安全上下文获取当前用户
-        return "system";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated()) {
+            // 返回用户名而不是"system"
+            return authentication.getName();
+        }
+        // 如果没有认证信息，返回默认值（生产环境应抛出异常）
+        log.warn("无法获取当前用户，使用默认值");
+        return "anonymous";
     }
 }

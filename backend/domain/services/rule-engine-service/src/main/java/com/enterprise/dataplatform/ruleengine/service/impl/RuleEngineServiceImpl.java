@@ -59,16 +59,59 @@ public class RuleEngineServiceImpl implements RuleEngineService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    // Setter方法用于单元测试注入
+    public void setKieContainer(KieContainer kieContainer) {
+        this.kieContainer = kieContainer;
+    }
+
+    public void setQualitySession(KieSession qualitySession) {
+        this.qualitySession = qualitySession;
+    }
+
+    public void setComplianceSession(KieSession complianceSession) {
+        this.complianceSession = complianceSession;
+    }
+
+    public void setValueSession(KieSession valueSession) {
+        this.valueSession = valueSession;
+    }
+
+    public void setLifecycleSession(KieSession lifecycleSession) {
+        this.lifecycleSession = lifecycleSession;
+    }
+
+    public void setGovernanceSession(KieSession governanceSession) {
+        this.governanceSession = governanceSession;
+    }
+
+    public void setExecutionLogRepository(RuleExecutionLogRepository executionLogRepository) {
+        this.executionLogRepository = executionLogRepository;
+    }
+
+    public void setObjectMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    public void setDroolsConfig(DroolsConfig droolsConfig) {
+        this.droolsConfig = droolsConfig;
+    }
+
     @Override
     public QualityScoreResult evaluateQualityScore(AssetEvaluation asset) {
         long startTime = System.currentTimeMillis();
         QualityScoreResult result = new QualityScoreResult();
 
         try {
-            KieSession session = kieContainer.newKieSession("qualitySession");
+            // 重置资产状态以确保干净的评估
+            resetAssetForEvaluation(asset);
+            
+            // 使用注入的会话代替每次创建新的（性能优化）
+            KieSession session = qualitySession;
+            if (session == null) {
+                session = kieContainer.newKieSession("qualitySession");
+            }
             session.insert(asset);
             int rulesFired = session.fireAllRules();
-            session.dispose();
 
             result.setAssetId(asset.getAssetId());
             result.setQualityScore(asset.getQualityScore());
@@ -105,10 +148,16 @@ public class RuleEngineServiceImpl implements RuleEngineService {
         ComplianceResult result = new ComplianceResult();
 
         try {
-            KieSession session = kieContainer.newKieSession("complianceSession");
+            // 重置资产状态以确保干净的评估
+            resetAssetForEvaluation(asset);
+            
+            // 使用注入的会话代替每次创建新的（性能优化）
+            KieSession session = complianceSession;
+            if (session == null) {
+                session = kieContainer.newKieSession("complianceSession");
+            }
             session.insert(asset);
             int rulesFired = session.fireAllRules();
-            session.dispose();
 
             result.setAssetId(asset.getAssetId());
             result.setComplianceStatus(asset.getComplianceStatus());
@@ -117,9 +166,9 @@ public class RuleEngineServiceImpl implements RuleEngineService {
             result.setTriggeredRules(asset.getTriggeredRules());
             result.setEvaluationSummary(asset.getEvaluationSummary());
 
-            // 根据违规详情设置各维度
+            // 根据违规详情设置各维度 - 添加空指针保护
             Map<String, String> details = asset.getComplianceDetails();
-            result.setNameCompliant(!"NON_COMPLIANT".equals(details.get("naming")));
+            result.setNameCompliant(details != null && !"NON_COMPLIANT".equals(details.get("naming")));
             result.setTypeCompliant(asset.getAssetType() != null && !asset.getAssetType().isEmpty());
 
             logExecution("COMPLIANCE_CHECK", "合规检查", "COMPLIANCE",
@@ -143,10 +192,16 @@ public class RuleEngineServiceImpl implements RuleEngineService {
         ValueScoreResult result = new ValueScoreResult();
 
         try {
-            KieSession session = kieContainer.newKieSession("valueSession");
+            // 重置资产状态以确保干净的评估
+            resetAssetForEvaluation(asset);
+            
+            // 使用注入的会话代替每次创建新的（性能优化）
+            KieSession session = valueSession;
+            if (session == null) {
+                session = kieContainer.newKieSession("valueSession");
+            }
             session.insert(asset);
             int rulesFired = session.fireAllRules();
-            session.dispose();
 
             result.setAssetId(asset.getAssetId());
             result.setValueScore(asset.getValueScore());
@@ -154,7 +209,7 @@ public class RuleEngineServiceImpl implements RuleEngineService {
             result.setQualityScore(asset.getQualityScore());
             result.setTriggeredRules(asset.getTriggeredRules());
             result.setEvaluationSummary(asset.getEvaluationSummary());
-            result.setValueDrivers(new ArrayList<>(asset.getEvaluationTags()));
+            result.setValueDrivers(new ArrayList<>(asset.getEvaluationTags() != null ? asset.getEvaluationTags() : new ArrayList<>()));
 
             logExecution("VALUE_EVALUATION", "价值评估", "VALUE",
                     asset.getAssetId(), asset, result, rulesFired, startTime, "SUCCESS", null);
@@ -177,10 +232,16 @@ public class RuleEngineServiceImpl implements RuleEngineService {
         LifecycleResult result = new LifecycleResult();
 
         try {
-            KieSession session = kieContainer.newKieSession("lifecycleSession");
+            // 重置资产状态以确保干净的评估
+            resetAssetForEvaluation(asset);
+            
+            // 使用注入的会话代替每次创建新的（性能优化）
+            KieSession session = lifecycleSession;
+            if (session == null) {
+                session = kieContainer.newKieSession("lifecycleSession");
+            }
             session.insert(asset);
             int rulesFired = session.fireAllRules();
-            session.dispose();
 
             result.setAssetId(asset.getAssetId());
             result.setRecommendedPhase(asset.getLifecyclePhase());
@@ -213,10 +274,16 @@ public class RuleEngineServiceImpl implements RuleEngineService {
         GovernanceRuleResult result = new GovernanceRuleResult();
 
         try {
-            KieSession session = kieContainer.newKieSession("governanceSession");
+            // 重置资产状态以确保干净的评估
+            resetAssetForEvaluation(asset);
+            
+            // 使用注入的会话代替每次创建新的（性能优化）
+            KieSession session = governanceSession;
+            if (session == null) {
+                session = kieContainer.newKieSession("governanceSession");
+            }
             session.insert(asset);
             int rulesFired = session.fireAllRules();
-            session.dispose();
 
             result.setAssetId(asset.getAssetId());
             result.setNeedsGovernanceAction(asset.isNeedsGovernanceAction());
@@ -225,7 +292,7 @@ public class RuleEngineServiceImpl implements RuleEngineService {
             result.setActionDescription(asset.getEvaluationSummary());
             result.setTriggeredRules(asset.getTriggeredRules());
             result.setEvaluationSummary(asset.getEvaluationSummary());
-            result.setRecommendations(new ArrayList<>(asset.getEvaluationTags()));
+            result.setRecommendations(new ArrayList<>(asset.getEvaluationTags() != null ? asset.getEvaluationTags() : new ArrayList<>()));
 
             logExecution("GOVERNANCE_EVALUATION", "治理评估", "GOVERNANCE",
                     asset.getAssetId(), asset, result, rulesFired, startTime, "SUCCESS", null);
@@ -345,6 +412,13 @@ public class RuleEngineServiceImpl implements RuleEngineService {
      * 重置资产评估状态，用于下一轮规则评估
      */
     private void resetAssetForReEvaluation(AssetEvaluation asset) {
+        resetAssetForEvaluation(asset);
+    }
+    
+    /**
+     * 重置资产评估状态（初始评估前）
+     */
+    private void resetAssetForEvaluation(AssetEvaluation asset) {
         asset.setQualityScore(0);
         asset.setValueScore(0);
         asset.setComplianceStatus("UNKNOWN");
@@ -355,7 +429,18 @@ public class RuleEngineServiceImpl implements RuleEngineService {
         asset.setNeedsGovernanceAction(false);
         asset.setGovernanceActionType(null);
         asset.setGovernancePriority(null);
-        asset.getComplianceDetails().clear();
+        // 初始化合规详情以避免空指针
+        if (asset.getComplianceDetails() == null) {
+            asset.setComplianceDetails(new HashMap<>());
+        } else {
+            asset.getComplianceDetails().clear();
+        }
+        asset.setQualityIssues(0);
+        asset.setCompleteness(0.0);
+        asset.setAccuracy(0.0);
+        asset.setConsistency(0.0);
+        asset.setTimeliness(0.0);
+        asset.setUniqueness(0.0);
     }
 
     /**

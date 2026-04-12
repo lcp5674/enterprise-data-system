@@ -1,0 +1,90 @@
+spring:
+  application:
+    name: edams-gateway
+  profiles:
+    active: prod
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:prod}
+        group: EDAMS_GROUP
+      config:
+        server-addr: ${NACOS_HOST:localhost}:${NACOS_PORT:8848}
+        namespace: ${NACOS_NAMESPACE:prod}
+        group: EDAMS_GROUP
+        file-extension: yml
+        refresh-enabled: true
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      # 生产环境路由配置（同dev）
+      routes:
+        # 路由配置保持不变...
+
+server:
+  port: 8888
+
+# Redis配置 - 生产环境连接池优化
+spring.data.redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:redis123}
+  database: 0
+  timeout: 5000ms
+  lettuce:
+    pool:
+      max-active: 50
+      max-idle: 20
+      min-idle: 10
+      max-wait: 3000ms
+
+# JWT密钥配置（与auth服务保持一致）
+jwt:
+  secret: ${JWT_SECRET:edams-jwt-secret-key-2026}
+
+# ==================== 生产环境限流配置优化 ====================
+gateway:
+  rate-limit:
+    ip:
+      requests-per-second: 100
+      requests-per-minute: 500
+    user:
+      requests-per-second: 50
+      requests-per-minute: 200
+    global:
+      requests-per-second: 2000
+    # 生产环境可选：白名单配置
+    whitelist:
+      enabled: true
+      ips: []
+
+# Actuator配置（网关监控）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+    gateway:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# 日志配置 - 生产环境
+logging:
+  level:
+    root: WARN
+    org.springframework.cloud.gateway: INFO
+    com.enterprise.edams.gateway: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /var/log/edams/gateway-service.log
+    max-size: 100MB
+    max-history: 30

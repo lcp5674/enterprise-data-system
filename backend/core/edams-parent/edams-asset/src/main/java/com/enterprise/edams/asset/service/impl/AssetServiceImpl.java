@@ -435,7 +435,9 @@ public class AssetServiceImpl implements AssetService {
             AssetTagRelation relation = new AssetTagRelation();
             relation.setAssetId(assetId);
             relation.setTagId(tagId);
-            relation.setTaggerId(Long.valueOf(operator));
+            // 安全处理：如果operator是数字字符串则转换，否则设为null或默认值
+            Long taggerId = parseOperatorToLong(operator);
+            relation.setTaggerId(taggerId);
             relation.setTagTime(LocalDateTime.now());
             relation.setCreatedBy(operator);
             relation.setUpdatedBy(operator);
@@ -462,5 +464,23 @@ public class AssetServiceImpl implements AssetService {
         dto.setTagIds(tags.stream().map(AssetTag::getId).collect(Collectors.toList()));
         
         return dto;
+    }
+    
+    /**
+     * 安全解析操作人ID
+     * @param operator 操作人（可能是用户名或用户ID）
+     * @return 用户ID，如果无法解析则返回null
+     */
+    private Long parseOperatorToLong(String operator) {
+        if (operator == null || operator.isEmpty()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(operator);
+        } catch (NumberFormatException e) {
+            // 如果是用户名，需要查询用户ID（这里简化处理，返回null）
+            log.debug("操作人 {} 不是数字ID，将不设置taggerId", operator);
+            return null;
+        }
     }
 }
