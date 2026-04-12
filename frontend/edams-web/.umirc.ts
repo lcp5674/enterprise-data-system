@@ -186,6 +186,14 @@ export default defineConfig({
           ],
         },
         {
+          path: '/aiops',
+          name: '智能运维',
+          icon: 'MonitorOutlined',
+          routes: [
+            { path: '/aiops/index', component: 'aiops', name: '监控告警' },
+          ],
+        },
+        {
           path: '/system',
           name: '系统管理',
           icon: 'SettingOutlined',

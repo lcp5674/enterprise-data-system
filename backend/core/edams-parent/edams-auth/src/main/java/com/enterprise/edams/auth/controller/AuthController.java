@@ -117,7 +117,7 @@ public class AuthController {
     @Operation(summary = "发送重置密码验证码", description = "向用户邮箱或手机号发送重置密码的验证码")
     public Result<Void> sendResetCode(
             @Parameter(description = "用户名/邮箱/手机号") @RequestParam("account") String account) {
-        // TODO: 实现验证码发送逻辑
+        authService.sendResetCode(account);
         return Result.success();
     }
 

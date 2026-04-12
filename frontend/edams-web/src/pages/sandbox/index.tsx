@@ -2,7 +2,7 @@
  * 数据沙箱页面
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -29,13 +29,15 @@ import {
   DatabaseOutlined,
   ClockCircleOutlined,
   DesktopOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import styles from './index.less';
+import { sandbox } from '../../services';
 
 interface SandboxRecord {
   id: string;
   name: string;
-  status: 'RUNNING' | 'STOPPED' | 'CREATING';
+  status: 'RUNNING' | 'STOPPED' | 'CREATING' | 'FAILED';
   resourceSpec: string;
   expireTime: string;
   description?: string;
@@ -58,72 +60,37 @@ const SandboxManagement: React.FC = () => {
     { label: '超大型 (16核32G)', value: 'xlarge', cpu: 16, memory: 32, storage: 500 },
   ];
 
-  // Mock数据
-  const mockData: SandboxRecord[] = [
-    {
-      id: '1',
-      name: '订单分析沙箱',
-      status: 'RUNNING',
-      resourceSpec: '4核8G',
-      expireTime: '2026-05-11',
-      description: '用于订单数据分析测试',
-      cpu: 4,
-      memory: 8,
-      storage: 100,
-    },
-    {
-      id: '2',
-      name: '用户画像沙箱',
-      status: 'RUNNING',
-      resourceSpec: '8核16G',
-      expireTime: '2026-05-15',
-      description: '用户画像模型训练环境',
-      cpu: 8,
-      memory: 16,
-      storage: 200,
-    },
-    {
-      id: '3',
-      name: '报表测试沙箱',
-      status: 'STOPPED',
-      resourceSpec: '2核4G',
-      expireTime: '2026-04-20',
-      description: '财务报表功能测试',
-      cpu: 2,
-      memory: 4,
-      storage: 50,
-    },
-    {
-      id: '4',
-      name: '数据脱敏沙箱',
-      status: 'CREATING',
-      resourceSpec: '4核8G',
-      expireTime: '2026-05-01',
-      description: '敏感数据脱敏处理环境',
-      cpu: 4,
-      memory: 8,
-      storage: 100,
-    },
-    {
-      id: '5',
-      name: 'ETL测试沙箱',
-      status: 'RUNNING',
-      resourceSpec: '16核32G',
-      expireTime: '2026-06-01',
-      description: '大规模ETL作业测试',
-      cpu: 16,
-      memory: 32,
-      storage: 500,
-    },
-  ];
+  // 从API加载沙箱列表
+  const loadSandboxes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await sandbox.getSandboxList();
+      if (response.success && response.data) {
+        // 转换API数据格式为页面需要的格式
+        const mappedData: SandboxRecord[] = (response.data.records || response.data).map((item: any) => ({
+          id: String(item.id),
+          name: item.name,
+          status: item.status,
+          resourceSpec: item.spec ? `${item.spec.cpu}核${item.spec.memory}G` : '4核8G',
+          expireTime: item.expireTime,
+          description: item.description,
+          cpu: item.spec?.cpu || 4,
+          memory: item.spec?.memory || 8,
+          storage: item.spec?.disk || 100,
+        }));
+        setDataSource(mappedData);
+      }
+    } catch (error) {
+      message.error('加载沙箱列表失败');
+      console.error('Load sandboxes error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => {
-      setDataSource(mockData);
-      setLoading(false);
-    }, 500);
-  }, []);
+    loadSandboxes();
+  }, [loadSandboxes]);
 
   // 获取状态标签配置
   const getStatusConfig = (status: string) => {
@@ -131,6 +98,7 @@ const SandboxManagement: React.FC = () => {
       RUNNING: { color: 'green', label: '运行中', icon: <PlayCircleOutlined /> },
       STOPPED: { color: 'gray', label: '已停止', icon: <PauseCircleOutlined /> },
       CREATING: { color: 'blue', label: '创建中', icon: <ClockCircleOutlined /> },
+      FAILED: { color: 'red', label: '失败', icon: <PauseCircleOutlined /> },
     };
     return config[status] || { color: 'default', label: status, icon: null };
   };
@@ -155,20 +123,33 @@ const SandboxManagement: React.FC = () => {
   };
 
   // 启动/停止沙箱
-  const handleToggleStatus = (record: SandboxRecord) => {
-    const newStatus = record.status === 'RUNNING' ? 'STOPPED' : 'RUNNING';
-    setDataSource(
-      dataSource.map((item) =>
-        item.id === record.id ? { ...item, status: newStatus } : item
-      )
-    );
-    message.success(`沙箱 "${record.name}" 已${newStatus === 'RUNNING' ? '启动' : '停止'}`);
+  const handleToggleStatus = async (record: SandboxRecord) => {
+    try {
+      if (record.status === 'RUNNING') {
+        await sandbox.stopSandbox(record.id);
+        message.success(`沙箱 "${record.name}" 已停止`);
+      } else {
+        await sandbox.startSandbox(record.id);
+        message.success(`沙箱 "${record.name}" 已启动`);
+      }
+      // 刷新列表
+      loadSandboxes();
+    } catch (error) {
+      message.error('操作失败');
+      console.error('Toggle status error:', error);
+    }
   };
 
   // 删除沙箱
-  const handleDelete = (id: string) => {
-    message.success('删除成功');
-    setDataSource(dataSource.filter((item) => item.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await sandbox.deleteSandbox(id);
+      message.success('删除成功');
+      setDataSource(dataSource.filter((item) => item.id !== id));
+    } catch (error) {
+      message.error('删除失败');
+      console.error('Delete error:', error);
+    }
   };
 
   // 提交创建
@@ -177,33 +158,23 @@ const SandboxManagement: React.FC = () => {
       const values = await form.validateFields();
       const spec = resourceSpecs.find((s) => s.value === values.resourceSpec);
       
-      const newRecord: SandboxRecord = {
-        id: `sandbox-${Date.now()}`,
+      await sandbox.createSandbox({
         name: values.name,
-        status: 'CREATING',
-        resourceSpec: spec ? `${spec.cpu}核${spec.memory}G` : '4核8G',
-        expireTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         description: values.description,
-        cpu: spec?.cpu || 4,
-        memory: spec?.memory || 8,
-        storage: spec?.storage || 100,
-      };
+        spec: {
+          cpu: `${spec?.cpu || 4}`,
+          memory: `${spec?.memory || 8}`,
+          disk: `${spec?.storage || 100}`,
+        },
+      });
       
-      setDataSource([newRecord, ...dataSource]);
       message.success('沙箱创建中，请稍候...');
       setModalVisible(false);
-      
-      // 模拟创建完成
-      setTimeout(() => {
-        setDataSource((prev) =>
-          prev.map((item) =>
-            item.id === newRecord.id ? { ...item, status: 'RUNNING' } : item
-          )
-        );
-        message.success(`沙箱 "${newRecord.name}" 创建完成`);
-      }, 3000);
+      // 刷新列表
+      loadSandboxes();
     } catch (error) {
-      // 表单验证失败
+      message.error('创建沙箱失败');
+      console.error('Create sandbox error:', error);
     }
   };
 
@@ -298,9 +269,14 @@ const SandboxManagement: React.FC = () => {
       <Card className={styles.mainCard}>
         {/* 工具栏 */}
         <div className={styles.toolbar}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            创建沙箱
-          </Button>
+          <Space>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              创建沙箱
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={loadSandboxes}>
+              刷新
+            </Button>
+          </Space>
         </div>
 
         {/* 主表格 */}

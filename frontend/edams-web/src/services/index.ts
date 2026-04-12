@@ -76,6 +76,9 @@ export * from './sandbox';
 export { default as rules } from './rules';
 export * from './rules';
 
+export { default as aiops } from './aiops';
+export * from './aiops';
+
 export { default as sso } from './sso';
 export * from './sso';
 
@@ -101,6 +104,7 @@ import chatbot from './chatbot';
 import sla from './sla';
 import sandbox from './sandbox';
 import rules from './rules';
+import aiops from './aiops';
 import sso from './sso';
 
 /**
@@ -129,6 +133,7 @@ export const api = {
   sla,
   sandbox,
   rules,
+  aiops,
   sso,
 };
 

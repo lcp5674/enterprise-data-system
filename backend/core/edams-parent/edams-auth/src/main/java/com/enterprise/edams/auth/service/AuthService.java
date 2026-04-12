@@ -47,4 +47,10 @@ public interface AuthService {
      * 重置密码（通过验证码）
      */
     void resetPassword(String username, String verificationCode, String newPassword);
+
+    /**
+     * 发送重置密码验证码
+     * @param account 用户账户（用户名/邮箱/手机号）
+     */
+    void sendResetCode(String account);
 }

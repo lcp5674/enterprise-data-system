@@ -60,10 +60,22 @@ mybatis-plus:
 # 通知服务配置
 notification:
   email:
-    from: edams-noreply@edams.com
+    from: ${SMTP_FROM:edams-noreply@edams.com}
+    reply-to: ${SMTP_REPLY_TO:support@edams.com}
+    smtp-timeout: ${SMTP_TIMEOUT:5000}
   sms:
-    api-url: ""
-    access-key: ""
+    provider: ${SMS_PROVIDER:aliyun}
+    api-url: ${SMS_API_URL:https://dysmsapi.aliyuncs.com}
+    access-key: ${SMS_ACCESS_KEY:}
+    secret-key: ${SMS_SECRET_KEY:}
+    sign-name: ${SMS_SIGN_NAME:EDAMS数据平台}
+    template-code: ${SMS_TEMPLATE_CODE:}
+  webhook:
+    wechat-webhook-enabled: true
+    dingtalk-webhook-enabled: true
+    feishu-webhook-enabled: true
+    connect-timeout: ${WEBHOOK_TIMEOUT:3000}
+    read-timeout: ${WEBHOOK_TIMEOUT:10000}
 
 management:
   endpoints.web.exposure.include: health,info,metrics

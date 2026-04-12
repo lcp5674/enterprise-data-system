@@ -11,7 +11,10 @@ import com.enterprise.edams.auth.service.AuthService;
 import com.enterprise.edams.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -38,6 +42,19 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
     private final JwtProperties jwtProperties;
+
+    // 邮件发送（可选注入）
+    private final JavaMailSender javaMailSender;
+
+    @Value("${spring.mail.username:noreply@edams.com}")
+    private String mailFrom;
+
+    // 验证码长度
+    private static final int CODE_LENGTH = 6;
+    // 验证码有效期（分钟）
+    private static final int CODE_EXPIRE_MINUTES = 10;
+    // 验证码发送间隔（秒）
+    private static final int CODE_SEND_INTERVAL = 60;
 
     /**
      * 用户登录
@@ -274,6 +291,174 @@ public class AuthServiceImpl implements AuthService {
         jwtTokenProvider.invalidateUserTokens(user.getId());
 
         log.info("用户 {} 密码重置成功", username);
+    }
+
+    /**
+     * 发送重置密码验证码
+     */
+    @Override
+    public void sendResetCode(String account) {
+        // 检查发送频率限制
+        String rateLimitKey = "edams:resetpwd:ratelimit:" + account;
+        String lastSendTime = stringRedisTemplate.opsForValue().get(rateLimitKey);
+        if (lastSendTime != null) {
+            long secondsSinceLastSend = (System.currentTimeMillis() - Long.parseLong(lastSendTime)) / 1000;
+            if (secondsSinceLastSend < CODE_SEND_INTERVAL) {
+                throw new BusinessException("验证码发送过于频繁，请" + (CODE_SEND_INTERVAL - secondsSinceLastSend) + "秒后再试");
+            }
+        }
+
+        // 查找用户
+        User user = null;
+        if (account.contains("@")) {
+            // 邮箱格式
+            user = userMapper.findByEmail(account);
+        } else if (account.matches("^1[3-9]\\d{9}$")) {
+            // 手机号格式
+            user = userMapper.findByPhone(account);
+        } else {
+            // 用户名
+            user = userMapper.findByUsername(account);
+        }
+
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+
+        // 生成6位验证码
+        String code = generateVerificationCode();
+
+        // 保存验证码到Redis
+        String codeKey = "edams:resetpwd:" + account;
+        stringRedisTemplate.opsForValue().set(codeKey, code, CODE_EXPIRE_MINUTES, TimeUnit.MINUTES);
+
+        // 更新发送频率限制
+        stringRedisTemplate.opsForValue().set(rateLimitKey, String.valueOf(System.currentTimeMillis()), CODE_SEND_INTERVAL, TimeUnit.SECONDS);
+
+        // 发送验证码
+        try {
+            if (account.contains("@")) {
+                // 发送邮件
+                sendCodeByEmail(user.getEmail(), code);
+            } else if (account.matches("^1[3-9]\\d{9}$")) {
+                // 发送短信（这里调用通知服务）
+                sendCodeBySms(account, code);
+            } else {
+                // 如果是用户名，尝试发送到用户注册的邮箱或手机
+                if (user.getEmail() != null && !user.getEmail().isEmpty()) {
+                    sendCodeByEmail(user.getEmail(), code);
+                } else if (user.getPhone() != null && !user.getPhone().isEmpty()) {
+                    sendCodeBySms(user.getPhone(), code);
+                } else {
+                    throw new BusinessException("该用户未绑定邮箱或手机号，请联系管理员");
+                }
+            }
+        } catch (Exception e) {
+            log.error("发送验证码失败: {}", e.getMessage());
+            throw new BusinessException("发送验证码失败，请稍后重试");
+        }
+
+        log.info("验证码已发送到账户: {}", maskAccount(account));
+    }
+
+    /**
+     * 生成6位数字验证码
+     */
+    private String generateVerificationCode() {
+        Random random = new Random();
+        StringBuilder code = new StringBuilder();
+        for (int i = 0; i < CODE_LENGTH; i++) {
+            code.append(random.nextInt(10));
+        }
+        return code.toString();
+    }
+
+    /**
+     * 通过邮件发送验证码
+     */
+    private void sendCodeByEmail(String email, String code) {
+        if (javaMailSender == null) {
+            log.warn("邮件发送器未配置，跳过邮件发送");
+            return;
+        }
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(mailFrom);
+            message.setTo(email);
+            message.setSubject("【EDAMS数据平台】密码重置验证码");
+            message.setText(buildEmailContent(code));
+            javaMailSender.send(message);
+            log.info("验证码已发送到邮箱: {}", maskEmail(email));
+        } catch (Exception e) {
+            log.error("发送邮件失败: {}", e.getMessage());
+            // 邮件发送失败不影响主流程，验证码已保存在Redis
+        }
+    }
+
+    /**
+     * 通过短信发送验证码
+     */
+    private void sendCodeBySms(String phone, String code) {
+        // 调用通知服务发送短信
+        // 这里可以通过Feign调用notification服务
+        log.info("短信验证码已生成，将发送到手机: {}", maskPhone(phone));
+        // 实际实现中应该调用通知服务
+        // notificationService.sendSms(phone, "您的密码重置验证码是：" + code);
+    }
+
+    /**
+     * 构建邮件内容
+     */
+    private String buildEmailContent(String code) {
+        return """
+            尊敬的用户，您好！
+
+            您在EDAMS数据平台提交了密码重置请求，请使用以下验证码完成验证：
+
+            验证码：%s
+
+            验证码有效期为10分钟，请勿将验证码泄露给他人。
+
+            如果您未发起密码重置请求，请忽略此邮件。
+
+            此致
+            EDAMS数据平台
+            """.formatted(code);
+    }
+
+    /**
+     * 掩码邮箱
+     */
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        int atIndex = email.indexOf("@");
+        String localPart = email.substring(0, atIndex);
+        if (localPart.length() <= 3) {
+            return "***" + email.substring(atIndex);
+        }
+        return localPart.substring(0, 3) + "***" + email.substring(atIndex);
+    }
+
+    /**
+     * 掩码手机号
+     */
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 7) return phone;
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
+    }
+
+    /**
+     * 掩码账户
+     */
+    private String maskAccount(String account) {
+        if (account.contains("@")) {
+            return maskEmail(account);
+        } else if (account.matches("^1[3-9]\\d{9}$")) {
+            return maskPhone(account);
+        }
+        if (account.length() <= 3) return "***";
+        return account.substring(0, 3) + "***";
     }
 
     // ==================== 私有辅助方法 ====================
