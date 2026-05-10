@@ -194,6 +194,46 @@ export default defineConfig({
           ],
         },
         {
+          path: '/metrics',
+          name: '指标管理',
+          icon: 'BarChartOutlined',
+          routes: [
+            { path: '/metrics/list', component: 'metric', name: '指标列表' },
+          ],
+        },
+        {
+          path: '/knowledge',
+          name: '知识图谱',
+          icon: 'BranchesOutlined',
+          routes: [
+            { path: '/knowledge/graph', component: 'knowledge', name: '图谱浏览' },
+          ],
+        },
+        {
+          path: '/protection',
+          name: '数据保护',
+          icon: 'SafetyOutlined',
+          routes: [
+            { path: '/protection/watermark', component: 'watermark', name: '水印管理' },
+          ],
+        },
+        {
+          path: '/analytics',
+          name: '数据分析',
+          icon: 'AreaChartOutlined',
+          routes: [
+            { path: '/analytics/value', component: 'value', name: '价值评估' },
+          ],
+        },
+        {
+          path: '/workflow',
+          name: '工作流',
+          icon: 'ApartmentOutlined',
+          routes: [
+            { path: '/workflow/manage', component: 'workflow', name: '流程管理' },
+          ],
+        },
+        {
           path: '/system',
           name: '系统管理',
           icon: 'SettingOutlined',
