@@ -20,6 +20,7 @@ public class TableMetadata {
     private Long estimatedRowCount;
     private Long dataSizeBytes;
     private List<ColumnMetadata> columns;
+    private List<List<Object>> sampleData;
 
     public String getFullTableName() {
         return schemaName != null ? schemaName + "." + tableName : tableName;

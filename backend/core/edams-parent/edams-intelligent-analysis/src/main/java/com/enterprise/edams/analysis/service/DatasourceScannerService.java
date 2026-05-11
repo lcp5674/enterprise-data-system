@@ -1,166 +1,145 @@
 package com.enterprise.edams.analysis.service;
 
+import com.enterprise.edams.analysis.datasource.DatasourceConnectionInfo;
+import com.enterprise.edams.analysis.datasource.DatasourceConnector;
+import com.enterprise.edams.analysis.datasource.DatasourceConnectorFactory;
 import com.enterprise.edams.analysis.exception.AnalysisException;
 import com.enterprise.edams.analysis.metadata.ColumnMetadata;
 import com.enterprise.edams.analysis.metadata.TableMetadata;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.sql.*;
+import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class DatasourceScannerService {
+
+    private final DatasourceConnectionService datasourceConnectionService;
+    private final DatasourceConnectorFactory connectorFactory;
 
     public List<String> scanTables(Long datasourceId, String schema, List<String> targetTables, List<String> excludedTables) {
         log.info("Scanning tables for datasource: {}, schema: {}", datasourceId, schema);
 
-        List<String> allTables = new ArrayList<>();
+        DatasourceConnectionInfo connectionInfo = datasourceConnectionService.getDatasourceConnectionInfo(datasourceId);
+        DatasourceConnector connector = connectorFactory.getConnector(connectionInfo);
 
-        try (Connection conn = getConnection(datasourceId)) {
-            DatabaseMetaData metaData = conn.getMetaData();
-            String catalog = conn.getCatalog();
-            
-            try (ResultSet rs = metaData.getTables(catalog, schema, "%", new String[]{"TABLE"})) {
-                while (rs.next()) {
-                    String tableName = rs.getString("TABLE_NAME");
-                    allTables.add(tableName);
+        try {
+            List<String> allTables = connector.getTables(connectionInfo, schema);
+
+            if (targetTables != null && !targetTables.isEmpty()) {
+                List<String> filtered = new ArrayList<>();
+                for (String target : targetTables) {
+                    if (allTables.contains(target)) {
+                        filtered.add(target);
+                    } else {
+                        log.warn("Target table not found in datasource: {}", target);
+                    }
                 }
+                allTables = filtered;
+                log.info("Filtered to {} target tables", allTables.size());
             }
 
-            log.info("Found {} tables in datasource {}", allTables.size(), datasourceId);
+            if (excludedTables != null && !excludedTables.isEmpty()) {
+                allTables.removeAll(excludedTables);
+                log.info("Excluded {} tables, remaining {}", excludedTables.size(), allTables.size());
+            }
+
+            return allTables;
 
         } catch (Exception e) {
             log.error("Failed to scan tables: {}", e.getMessage(), e);
             throw new AnalysisException("SCAN_FAILED", "扫描表失败: " + e.getMessage());
         }
-
-        if (targetTables != null && !targetTables.isEmpty()) {
-            allTables.retainAll(targetTables);
-            log.info("Filtered to {} target tables", allTables.size());
-        }
-
-        if (excludedTables != null && !excludedTables.isEmpty()) {
-            allTables.removeAll(excludedTables);
-            log.info("Excluded {} tables, remaining {}", excludedTables.size(), allTables.size());
-        }
-
-        return allTables;
     }
 
     public TableMetadata getTableMetadata(Long datasourceId, String schema, String tableName, int sampleRowCount) {
         log.debug("Getting metadata for table: {}.{}", schema, tableName);
 
-        TableMetadata.TableMetadataBuilder builder = TableMetadata.builder()
-                .schemaName(schema)
-                .tableName(tableName);
+        DatasourceConnectionInfo connectionInfo = datasourceConnectionService.getDatasourceConnectionInfo(datasourceId);
+        DatasourceConnector connector = connectorFactory.getConnector(connectionInfo);
 
-        try (Connection conn = getConnection(datasourceId)) {
-            DatabaseMetaData metaData = conn.getMetaData();
-            String catalog = conn.getCatalog();
+        try {
+            TableMetadata metadata = connector.getTableMetadata(connectionInfo, schema, tableName);
 
-            try (ResultSet rs = metaData.getTables(catalog, schema, tableName, new String[]{"TABLE"})) {
-                if (rs.next()) {
-                    builder.tableComment(rs.getString("REMARKS"));
-                }
+            if (sampleRowCount > 0) {
+                List<List<Object>> sampleData = connector.getSampleData(connectionInfo, schema, tableName, sampleRowCount);
+                metadata.setSampleData(sampleData);
             }
 
-            List<ColumnMetadata> columns = new ArrayList<>();
-            try (ResultSet rs = metaData.getColumns(catalog, schema, tableName, "%")) {
-                while (rs.next()) {
-                    ColumnMetadata column = ColumnMetadata.builder()
-                            .columnName(rs.getString("COLUMN_NAME"))
-                            .dataType(rs.getString("TYPE_NAME"))
-                            .columnType(rs.getString("TYPE_NAME") + "(" + rs.getInt("COLUMN_SIZE") + ")"))
-                            .columnComment(rs.getString("REMARKS"))
-                            .nullable(rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable)
-                            .ordinalPosition(rs.getInt("ORDINAL_POSITION"))
-                            .defaultValue(rs.getString("COLUMN_DEF"))
-                            .characterMaximumLength(rs.getInt("CHAR_OCTET_LENGTH") > 0 ? rs.getInt("CHAR_OCTET_LENGTH") : null)
-                            .numericPrecision(rs.getInt("NUMERIC_PRECISION") > 0 ? rs.getInt("NUMERIC_PRECISION") : null)
-                            .numericScale(rs.getInt("NUM_SCALE") > 0 ? rs.getInt("NUM_SCALE") : null)
-                            .build();
-                    columns.add(column);
-                }
-            }
-
-            List<String> primaryKeys = new ArrayList<>();
-            try (ResultSet rs = metaData.getPrimaryKeys(catalog, schema, tableName)) {
-                while (rs.next()) {
-                    primaryKeys.add(rs.getString("COLUMN_NAME"));
-                }
-            }
-            for (ColumnMetadata column : columns) {
-                if (primaryKeys.contains(column.getColumnName())) {
-                    column.setPrimaryKey(true);
-                }
-            }
-
-            builder.columns(columns);
-
-            builder.estimatedRowCount(getEstimatedRowCount(conn, schema, tableName));
+            log.debug("Successfully retrieved metadata for table: {}.{}", schema, tableName);
+            return metadata;
 
         } catch (Exception e) {
             log.error("Failed to get table metadata: {}", e.getMessage(), e);
             throw new AnalysisException("METADATA_FAILED", "获取表元数据失败: " + e.getMessage());
         }
-
-        return builder.build();
     }
 
     public List<List<Object>> getSampleData(Long datasourceId, String schema, String tableName, int rowCount) {
         log.debug("Getting sample data for table: {}.{}, rows: {}", schema, tableName, rowCount);
 
-        List<List<Object>> sampleData = new ArrayList<>();
+        DatasourceConnectionInfo connectionInfo = datasourceConnectionService.getDatasourceConnectionInfo(datasourceId);
+        DatasourceConnector connector = connectorFactory.getConnector(connectionInfo);
 
-        try (Connection conn = getConnection(datasourceId)) {
-            String query = String.format("SELECT * FROM %s.%s LIMIT %d",
-                    schema != null ? schema : "",
-                    tableName,
-                    rowCount);
-
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(query)) {
-
-                ResultSetMetaData rsMetaData = rs.getMetaData();
-                int columnCount = rsMetaData.getColumnCount();
-
-                while (rs.next()) {
-                    List<Object> row = new ArrayList<>();
-                    for (int i = 1; i <= columnCount; i++) {
-                        row.add(rs.getObject(i));
-                    }
-                    sampleData.add(row);
-                }
-            }
+        try {
+            List<List<Object>> sampleData = connector.getSampleData(connectionInfo, schema, tableName, rowCount);
+            log.debug("Retrieved {} sample rows from {}.{}", sampleData.size(), schema, tableName);
+            return sampleData;
 
         } catch (Exception e) {
             log.error("Failed to get sample data: {}", e.getMessage(), e);
+            throw new AnalysisException("SAMPLE_DATA_FAILED", "获取样本数据失败: " + e.getMessage());
         }
-
-        return sampleData;
     }
 
-    private Connection getConnection(Long datasourceId) throws SQLException {
-        throw new AnalysisException("NOT_IMPLEMENTED", "需要实现数据源连接获取逻辑，连接到实际的数据源");
-    }
+    public Long getRowCount(Long datasourceId, String schema, String tableName) {
+        DatasourceConnectionInfo connectionInfo = datasourceConnectionService.getDatasourceConnectionInfo(datasourceId);
+        DatasourceConnector connector = connectorFactory.getConnector(connectionInfo);
 
-    private Long getEstimatedRowCount(Connection conn, String schema, String tableName) {
-        String query = String.format("SELECT COUNT(*) FROM %s.%s",
-                schema != null ? schema : "",
-                tableName);
-
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(query)) {
-            if (rs.next()) {
-                return rs.getLong(1);
-            }
+        try {
+            return connector.getRowCount(connectionInfo, schema, tableName);
         } catch (Exception e) {
-            log.warn("Failed to get row count: {}", e.getMessage());
+            log.error("Failed to get row count: {}", e.getMessage(), e);
+            return 0L;
+        }
+    }
+
+    public List<ColumnMetadata> getColumns(Long datasourceId, String schema, String tableName) {
+        TableMetadata metadata = getTableMetadata(datasourceId, schema, tableName, 0);
+        return metadata.getColumns();
+    }
+
+    public List<String> getSchemas(Long datasourceId) {
+        log.debug("Getting schemas for datasource: {}", datasourceId);
+
+        DatasourceConnectionInfo connectionInfo = datasourceConnectionService.getDatasourceConnectionInfo(datasourceId);
+
+        if (!connectionInfo.supportsSchema()) {
+            log.debug("Datasource {} does not support schemas", connectionInfo.getDatasourceType());
+            return List.of();
         }
 
-        return null;
+        try (Connection conn = datasourceConnectionService.getConnection(datasourceId)) {
+            List<String> schemas = new ArrayList<>();
+            java.sql.DatabaseMetaData metaData = conn.getMetaData();
+
+            try (java.sql.ResultSet rs = metaData.getSchemas()) {
+                while (rs.next()) {
+                    schemas.add(rs.getString(1));
+                }
+            }
+
+            log.info("Found {} schemas in datasource {}", schemas.size(), datasourceId);
+            return schemas;
+
+        } catch (Exception e) {
+            log.error("Failed to get schemas: {}", e.getMessage(), e);
+            return List.of();
+        }
     }
 }
