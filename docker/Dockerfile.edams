@@ -1,0 +1,114 @@
+# =====================================================
+# EDAMS - 统一Dockerfile (全项目构建)
+# =====================================================
+
+# 阶段1: 构建阶段
+FROM maven:3.9.5-eclipse-temurin-17 AS builder
+
+WORKDIR /build
+
+# 设置Maven镜像
+RUN sed -i 's|https://repo.maven.apache.org|https://maven.aliyun.com/repository/public|g' /usr/share/maven/conf/settings.xml
+
+# 复制父POM和公共模块
+COPY backend/core/edams-parent/pom.xml backend/core/edams-parent/
+COPY backend/core/edams-parent/edams-common/pom.xml backend/core/edams-parent/edams-common/
+
+# 复制所有微服务POM
+COPY backend/core/edams-parent/edams-gateway/pom.xml backend/core/edams-parent/edams-gateway/
+COPY backend/core/edams-parent/edams-auth/pom.xml backend/core/edams-parent/edams-auth/
+COPY backend/core/edams-parent/edams-user/pom.xml backend/core/edams-parent/edams-user/
+COPY backend/core/edams-parent/edams-permission/pom.xml backend/core/edams-parent/edams-permission/
+COPY backend/core/edams-parent/edams-notification/pom.xml backend/core/edams-parent/edams-notification/
+COPY backend/core/edams-parent/edams-workflow/pom.xml backend/core/edams-parent/edams-workflow/
+COPY backend/core/edams-parent/edams-asset/pom.xml backend/core/edams-parent/edams-asset/
+COPY backend/core/edams-parent/edams-analytics/pom.xml backend/core/edams-parent/edams-analytics/
+COPY backend/core/edams-parent/edams-report/pom.xml backend/core/edams-parent/edams-report/
+COPY backend/core/edams-parent/edams-knowledge/pom.xml backend/core/edams-parent/edams-knowledge/
+COPY backend/core/edams-parent/edams-llm/pom.xml backend/core/edams-parent/edams-llm/
+COPY backend/core/edams-parent/edams-llm-client/pom.xml backend/core/edams-parent/edams-llm-client/
+COPY backend/core/edams-parent/edams-lifecycle/pom.xml backend/core/edams-parent/edams-lifecycle/
+COPY backend/core/edams-parent/edams-collaboration/pom.xml backend/core/edams-parent/edams-collaboration/
+COPY backend/core/edams-parent/edams-aiops/pom.xml backend/core/edams-parent/edams-aiops/
+COPY backend/core/edams-parent/edams-chatbot/pom.xml backend/core/edams-parent/edams-chatbot/
+COPY backend/core/edams-parent/edams-version/pom.xml backend/core/edams-parent/edams-version/
+COPY backend/core/edams-parent/edams-intelligent-analysis/pom.xml backend/core/edams-parent/edams-intelligent-analysis/
+COPY backend/core/edams-parent/sandbox-service/pom.xml backend/core/edams-parent/sandbox-service/
+COPY backend/core/edams-parent/sla-service/pom.xml backend/core/edams-parent/sla-service/
+COPY backend/core/edams-parent/value-service/pom.xml backend/core/edams-parent/value-service/
+COPY backend/core/edams-parent/watermark-service/pom.xml backend/core/edams-parent/watermark-service/
+COPY backend/core/edams-parent/incentive-service/pom.xml backend/core/edams-parent/incentive-service/
+
+# 下载依赖（利用缓存）
+RUN mvn dependency:go-offline -B -f backend/core/edams-parent/pom.xml || true
+
+# 复制所有后端源码
+COPY backend backend
+
+# 构建所有微服务
+RUN mvn clean package -DskipTests -B -f backend/core/edams-parent/pom.xml
+
+# 阶段2: JRE运行环境
+FROM eclipse-temurin:17-jre-alpine
+
+LABEL maintainer="EDAMS Team"
+LABEL description="EDAMS Enterprise Data Asset Management System - Full Stack Deployment"
+
+# 安装必要工具
+RUN apk add --no-cache \
+    curl \
+    bash \
+    mysql-client \
+    postgresql-client \
+    ca-certificates \
+    tzdata
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# 创建非root用户
+RUN addgroup -S edams && adduser -S edams -G edams
+
+WORKDIR /app
+
+# 创建服务目录结构
+RUN mkdir -p /app/services /app/logs /app/data /app/tmp && \
+    chown -R edams:edams /app
+
+# 从构建阶段复制所有服务JAR
+COPY --from=builder /build/backend/core/edams-parent/edams-gateway/target/*.jar /app/services/edams-gateway.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-auth/target/*.jar /app/services/edams-auth.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-user/target/*.jar /app/services/edams-user.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-permission/target/*.jar /app/services/edams-permission.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-notification/target/*.jar /app/services/edams-notification.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-workflow/target/*.jar /app/services/edams-workflow.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-asset/target/*.jar /app/services/edams-asset.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-analytics/target/*.jar /app/services/edams-analytics.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-report/target/*.jar /app/services/edams-report.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-knowledge/target/*.jar /app/services/edams-knowledge.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-llm/target/*.jar /app/services/edams-llm.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-lifecycle/target/*.jar /app/services/edams-lifecycle.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-collaboration/target/*.jar /app/services/edams-collaboration.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-aiops/target/*.jar /app/services/edams-aiops.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-chatbot/target/*.jar /app/services/edams-chatbot.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-intelligent-analysis/target/*.jar /app/services/edams-intelligent-analysis.jar
+COPY --from=builder /build/backend/core/edams-parent/edams-version/target/*.jar /app/services/edams-version.jar
+
+# 设置权限
+RUN chown -R edams:edams /app
+
+USER edams
+
+# JVM优化参数 (支持容器内存限制)
+ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+
+# 暴露端口范围 (8080-8099)
+EXPOSE 8080-8099
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+# 启动脚本入口 (通过SERVICE_NAME环境变量指定启动哪个服务)
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/services/$SERVICE_NAME.jar"]

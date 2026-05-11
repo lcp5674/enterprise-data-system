@@ -8,20 +8,22 @@ services:
     container_name: edams-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
-      MYSQL_DATABASE: edams
-      MYSQL_USER: edams
-      MYSQL_PASSWORD: edams123
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-edams}
+      MYSQL_USER: ${MYSQL_USER:-edams}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edams123}
       TZ: Asia/Shanghai
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --max_connections=1000
       - --default-authentication-plugin=mysql_native_password
+      - --lower_case_table_names=1
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -34,7 +36,7 @@ services:
     image: redis:7-alpine
     container_name: edams-redis
     restart: unless-stopped
-    command: redis-server --requirepass redis123 --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123} --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -52,15 +54,15 @@ services:
     container_name: edams-nacos
     restart: unless-stopped
     environment:
-      MODE: standalone
+      MODE: ${NACOS_MODE:-standalone}
       SPRING_DATASOURCE_PLATFORM: mysql
       MYSQL_SERVICE_HOST: mysql
       MYSQL_SERVICE_DB_NAME: nacos
       MYSQL_SERVICE_PORT: 3306
       MYSQL_SERVICE_USER: root
-      MYSQL_SERVICE_PASSWORD: root123456
-      JVM_XMS: 512m
-      JVM_XMX: 512m
+      MYSQL_SERVICE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      JVM_XMS: ${NACOS_JVM_XMS:-512m}
+      JVM_XMX: ${NACOS_JVM_XMX:-512m}
     ports:
       - "8848:8848"
       - "9848:9848"
@@ -129,7 +131,7 @@ services:
     container_name: edams-neo4j
     restart: unless-stopped
     environment:
-      NEO4J_AUTH: neo4j/neo4j123
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-neo4j123}
       NEO4J_server_memory_heap_max__size: 1G
       NEO4J_server_memory_pagecache_size: 512M
     ports:
@@ -151,8 +153,8 @@ services:
     container_name: edams-mongodb
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: mongo123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-mongo123}
       MONGO_INITDB_DATABASE: edams
     ports:
       - "27017:27017"
@@ -234,7 +236,7 @@ services:
     container_name: edams-grafana
     restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -253,6 +255,579 @@ services:
       - "16686:16686"
       - "6831:6831/udp"
       - "14268:14268"
+    networks:
+      - edams-network
+
+  # ==================== 应用服务 ====================
+  
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-gateway
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-gateway
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_gateway?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  auth:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-auth
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-auth
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_auth?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8081:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  asset:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-asset
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-asset
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_asset?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_ELASTICSEARCH_URIS=http://elasticsearch:9200
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8082:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  permission:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-permission
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-permission
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_permission?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8083:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  analytics:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-analytics
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-analytics
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_analytics?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8084:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  knowledge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-knowledge
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-knowledge
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_knowledge?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_NEO4J_URI=bolt://neo4j:7687
+      - SPRING_DATA_NEO4J_USERNAME=${NEO4J_USER:-neo4j}
+      - SPRING_DATA_NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8085:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  llm:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-llm
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-llm
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_llm?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8086:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  notification:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-notification
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-notification
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_notification?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8087:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  workflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-workflow
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-workflow
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_workflow?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8088:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  lifecycle:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-lifecycle
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-lifecycle
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_lifecycle?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8089:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  aiops:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-aiops
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-aiops
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_aiops?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8090:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  chatbot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-chatbot
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-chatbot
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_chatbot?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8091:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  intelligent-analysis:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-intelligent-analysis
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-intelligent-analysis
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_analysis?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - ANALYSIS_LLM_DEFAULT_BASE_URL=http://host.docker.internal:11434
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8092:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  user:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-user
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-user
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_user?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8093:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  collaboration:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-collaboration
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-collaboration
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_collaboration?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8094:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - edams-network
+
+  report:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.edams
+    container_name: edams-report
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=edams-report
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES:-docker}
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/edams_report?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123456}
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER-ADDR=nacos:8848
+      - JAVA_OPTS=-Xms512m -Xmx1024m -XX:+UseG1GC
+    ports:
+      - "8095:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     networks:
       - edams-network
 
