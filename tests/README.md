@@ -1,98 +1,187 @@
-# EDAMS 测试目录
+# EDAMS 测试模块
 
-本目录包含项目的各类测试代码。
+本项目包含EDAMS企业数据资产管理系统的完整测试套件，包括单元测试、集成测试和E2E测试。
 
 ## 目录结构
 
 ```
 tests/
-├── integration/         # 集成测试相关
-│   ├── test-data.sql     # 测试数据SQL
-│   ├── test-config.yml   # 测试配置文件
-│   └── docker-compose.test.yml  # 测试环境Docker配置
-├── api/                  # API测试脚本
-│   ├── auth-api-tests.sh      # 认证服务API测试
-│   ├── user-api-tests.sh      # 用户服务API测试
-│   ├── asset-api-tests.sh     # 资产服务API测试
-│   └── governance-api-tests.sh # 治理服务API测试
-└── e2e/                  # 端到端测试(Playwright)
-    ├── auth.spec.ts           # 认证模块
-    ├── user-management.spec.ts # 用户管理
-    ├── asset-lifecycle.spec.ts # 资产管理
-    ├── governance-workflow.spec.ts # 数据治理
-    ├── playwright.config.ts   # Playwright配置
-    └── README.md              # E2E测试说明
+├── api/                        # API测试脚本
+│   ├── asset-api-tests.sh
+│   ├── auth-api-tests.sh
+│   ├── governance-api-tests.sh
+│   └── user-api-tests.sh
+├── e2e/                        # E2E测试 (Playwright)
+│   ├── helpers/                # 测试辅助工具
+│   ├── asset-lifecycle.spec.ts # 资产生命周期测试
+│   ├── auth.spec.ts            # 认证流程测试
+│   ├── classification.spec.ts   # 数据分类分级测试
+│   ├── data-lifecycle.spec.ts  # 数据生命周期测试
+│   ├── governance-workflow.spec.ts # 治理工作流测试
+│   ├── quality-check.spec.ts    # 质量检查测试
+│   ├── playwright.config.ts    # Playwright配置
+│   ├── package.json
+│   └── README.md
+├── integration/                # 集成测试 (Spring Cloud Contract)
+│   ├── src/test/java/
+│   │   └── com/enterprise/edams/
+│   │       ├── contract/       # 契约测试
+│   │       └── integration/    # 集成测试
+│   ├── src/test/resources/
+│   │   ├── application-test.yml
+│   │   └── contracts/          # 契约定义文件
+│   ├── pom.xml
+│   └── README.md
+├── integration/                # Docker Compose测试环境
+│   ├── docker-compose.test.yml
+│   ├── test-config.yml
+│   └── test-data.sql
+└── README.md                   # 本文件
 ```
 
-## 快速开始
+## 测试类型
 
-### API测试
+### 1. API测试 (api/)
+
+基于Shell脚本的API功能测试，用于快速验证后端API接口。
 
 ```bash
-# 设置基础URL
-export BASE_URL=http://localhost:8080
-
-# 运行认证API测试
-bash tests/api/auth-api-tests.sh
-
-# 运行用户API测试
-bash tests/api/user-api-tests.sh
-
-# 运行资产API测试
-bash tests/api/asset-api-tests.sh
-
-# 运行治理API测试
-bash tests/api/governance-api-tests.sh
+cd tests/api
+./asset-api-tests.sh
+./auth-api-tests.sh
 ```
 
-### E2E测试
+### 2. 集成测试 (integration/)
 
+使用Spring Cloud Contract和JUnit 5实现的服务间集成测试。
+
+**技术栈：**
+- JUnit 5
+- Spring Cloud Contract
+- TestContainers
+- REST Assured
+
+**运行测试：**
+```bash
+cd tests/integration
+mvn test
+```
+
+**测试覆盖：**
+- 资产生命周期集成测试
+- 数据质量集成测试
+- 血缘关系集成测试
+- 契约测试（API兼容性验证）
+
+### 3. E2E测试 (e2e/)
+
+使用Playwright实现的前端E2E测试，覆盖完整的用户操作流程。
+
+**技术栈：**
+- Playwright
+- TypeScript
+- @playwright/test
+
+**运行测试：**
 ```bash
 cd tests/e2e
 npm install
-npx playwright install
-npx playwright test
+npm test
 ```
 
-### 集成测试环境
+**测试覆盖：**
+- 用户认证流程
+- 资产生命周期管理
+- 数据分类分级
+- 质量检查与追踪
+- 治理工作流
+- 血缘关系可视化
 
-使用Docker Compose启动测试数据库:
+## 快速开始
+
+### 前置条件
+
+- Node.js >= 18.0.0
+- Java 17+
+- Maven 3.8+
+- Docker (用于TestContainers)
+
+### 运行所有测试
 
 ```bash
-cd tests/integration
-docker-compose -f docker-compose.test.yml up -d
+# E2E测试
+cd tests/e2e && npm install && npm test
+
+# 集成测试
+cd tests/integration && mvn test
+
+# API测试
+cd tests/api && bash asset-api-tests.sh
 ```
 
-## 测试覆盖率
+## 测试报告
 
-### 后端单元测试
-- auth-service: Controller + Service测试
-- gateway: 路由 + 过滤器测试
-- metadata-service: Controller测试
-- lineage-service: Controller测试
-- quality-service: Controller测试
-- standard-service: Controller测试
-- governance-engine: Controller测试
+### E2E测试报告
 
-### API测试
-- 认证: 登录、注册、Token、MFA
-- 用户: CRUD、搜索、分页
-- 资产: 注册、查询、版本、生命周期
-- 治理: 策略、任务、推荐、合规
+- HTML报告：`playwright-report/index.html`
+- JSON结果：`playwright-results.json`
 
-### E2E测试
-- 认证流程: 登录、注册、登出
-- 用户管理: 增删改查、角色分配
-- 资产管理: 注册、查看、归档
-- 生命周期: 历史记录、版本管理
-- 数据治理: 策略、审批流、标准
-- 血缘关系: 可视化、影响分析
+### 集成测试报告
 
-## 持续集成
+- Surefire报告：`target/surefire-reports/`
 
-测试在以下时机自动执行:
-- PR创建/更新时
-- 代码合并到主分支时
-- 定时任务（每日凌晨）
+## CI/CD集成
 
-详见 `.gitlab-ci.yml` 和 `Jenkinsfile`。
+### GitLab CI配置示例
+
+```yaml
+test:integration:
+  stage: test
+  script:
+    - cd tests/integration
+    - mvn test
+  artifacts:
+    reports:
+      junit: tests/integration/target/surefire-reports/*.xml
+
+test:e2e:
+  stage: test
+  script:
+    - cd tests/e2e
+    - npm ci
+    - npx playwright install --with-deps
+    - npm run test:ci
+  artifacts:
+    reports:
+      junit: tests/e2e/playwright-results.xml
+    paths:
+      - tests/e2e/playwright-report/
+```
+
+## 最佳实践
+
+1. **测试隔离**：每个测试用例应独立运行，不依赖其他测试的执行结果
+2. **显式等待**：使用Playwright的自动等待机制，避免使用固定延迟
+3. **Page Objects**：使用Page Objects模式组织页面元素定位器
+4. **测试数据**：使用工厂方法或fixture创建测试数据
+5. **失败处理**：配置自动截图和录制功能，便于问题排查
+
+## 测试覆盖率目标
+
+| 测试类型 | 覆盖率目标 | 状态 |
+|---------|-----------|------|
+| API集成测试 | 核心API 100% | ✅ 已实现 |
+| 契约测试 | 主要服务接口 | ✅ 已实现 |
+| E2E测试 | 核心业务流程 | ✅ 已实现 |
+| 单元测试 | 各服务内部逻辑 | ⚠️ 待补充 |
+
+## 持续改进
+
+- 定期审查测试用例，移除过时的测试
+- 根据用户反馈添加新的测试场景
+- 优化测试执行时间，提高CI/CD效率
+- 补充性能测试和压力测试
+
+## 联系方式
+
+如有问题或建议，请联系测试团队。

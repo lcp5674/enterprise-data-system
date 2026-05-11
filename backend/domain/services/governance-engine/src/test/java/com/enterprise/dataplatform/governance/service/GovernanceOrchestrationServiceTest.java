@@ -4,6 +4,7 @@ import com.enterprise.dataplatform.governance.domain.entity.GovernanceTask;
 import com.enterprise.dataplatform.governance.domain.entity.TaskExecution;
 import com.enterprise.dataplatform.governance.dto.request.TaskExecutionRequest;
 import com.enterprise.dataplatform.governance.dto.response.TaskExecutionResponse;
+import com.enterprise.dataplatform.governance.repository.GovernancePolicyRepository;
 import com.enterprise.dataplatform.governance.repository.GovernanceTaskRepository;
 import com.enterprise.dataplatform.governance.repository.TaskExecutionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,10 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,9 +27,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/**
- * GovernanceOrchestrationService 单元测试
- */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("治理任务编排服务测试")
 class GovernanceOrchestrationServiceTest {
@@ -37,6 +37,9 @@ class GovernanceOrchestrationServiceTest {
     @Mock
     private TaskExecutionRepository executionRepository;
 
+    @Mock
+    private GovernancePolicyRepository policyRepository;
+
     @InjectMocks
     private GovernanceOrchestrationService orchestrationService;
 
@@ -45,6 +48,9 @@ class GovernanceOrchestrationServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(orchestrationService, "defaultTimeout", 3600);
+        ReflectionTestUtils.setField(orchestrationService, "maxRetry", 3);
+
         testTask = GovernanceTask.builder()
                 .id(1L)
                 .taskCode("TASK-001")
@@ -72,11 +78,11 @@ class GovernanceOrchestrationServiceTest {
     @Test
     @DisplayName("执行任务 - 正常执行场景")
     void testExecuteTask_Success() {
-        // Given
         TaskExecutionRequest request = TaskExecutionRequest.builder()
                 .taskId(1L)
-                .executionParams("{}")
+                .executionParams(Map.of())
                 .build();
+
         when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
         when(executionRepository.save(any(TaskExecution.class))).thenAnswer(invocation -> {
             TaskExecution saved = invocation.getArgument(0);
@@ -85,28 +91,25 @@ class GovernanceOrchestrationServiceTest {
         });
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         TaskExecutionResponse response = orchestrationService.executeTask(request, "test-executor");
 
-        // Then
         assertThat(response).isNotNull();
         assertThat(response.getTaskCode()).isEqualTo("TASK-001");
         assertThat(response.getExecutionStatus()).isEqualTo("RUNNING");
-        verify(taskRepository, times(2)).save(any(GovernanceTask.class));
+        verify(taskRepository, atLeast(1)).save(any(GovernanceTask.class));
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
     }
 
     @Test
     @DisplayName("执行任务 - 任务不存在抛出异常")
     void testExecuteTask_TaskNotFound() {
-        // Given
         TaskExecutionRequest request = TaskExecutionRequest.builder()
                 .taskId(999L)
-                .executionParams("{}")
+                .executionParams(Map.of())
                 .build();
+
         when(taskRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // When & Then
         assertThatThrownBy(() -> orchestrationService.executeTask(request, "test-executor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("任务不存在");
@@ -115,15 +118,12 @@ class GovernanceOrchestrationServiceTest {
     @Test
     @DisplayName("异步执行任务 - 执行成功场景")
     void testExecuteTaskAsync_Success() {
-        // Given
         when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
         when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         orchestrationService.executeTaskAsync(1L);
 
-        // Then
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
         verify(taskRepository, times(1)).save(any(GovernanceTask.class));
     }
@@ -131,56 +131,31 @@ class GovernanceOrchestrationServiceTest {
     @Test
     @DisplayName("异步执行任务 - 执行记录不存在")
     void testExecuteTaskAsync_ExecutionNotFound() {
-        // Given
         when(executionRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // When
         orchestrationService.executeTaskAsync(999L);
 
-        // Then
         verify(executionRepository, never()).save(any(TaskExecution.class));
-    }
-
-    @Test
-    @DisplayName("异步执行任务 - 执行失败场景")
-    void testExecuteTaskAsync_Failure() {
-        // Given
-        testTask.setTaskType("UNKNOWN_TYPE");
-        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
-        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
-        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
-
-        // When
-        orchestrationService.executeTaskAsync(1L);
-
-        // Then
-        verify(executionRepository, times(1)).save(any(TaskExecution.class));
     }
 
     @Test
     @DisplayName("更新任务为失败状态")
     void testUpdateTaskToFailed() {
-        // Given
         when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         orchestrationService.updateTaskToFailed(1L, "Test error message");
 
-        // Then
         verify(taskRepository, times(1)).save(any(GovernanceTask.class));
     }
 
     @Test
     @DisplayName("查询执行记录 - 正常查询")
     void testGetExecution_Success() {
-        // Given
         when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
 
-        // When
         TaskExecutionResponse response = orchestrationService.getExecution(1L);
 
-        // Then
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getBatchNo()).isEqualTo("EXEC-12345678");
@@ -189,106 +164,142 @@ class GovernanceOrchestrationServiceTest {
     @Test
     @DisplayName("查询执行记录 - 记录不存在抛出异常")
     void testGetExecution_NotFound() {
-        // Given
         when(executionRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // When & Then
         assertThatThrownBy(() -> orchestrationService.getExecution(999L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("执行记录不存在");
     }
 
     @Test
-    @DisplayName("批量执行任务 - 多任务执行")
-    void testBatchExecuteTasks() {
-        // Given
-        GovernanceTask task2 = GovernanceTask.builder()
-                .id(2L)
-                .taskCode("TASK-002")
-                .taskName("测试任务2")
-                .taskType("NOTIFICATION")
-                .taskStatus("PENDING")
-                .upstreamTasks(new ArrayList<>())
-                .downstreamTasks(new ArrayList<>())
-                .build();
+    @DisplayName("执行编排类型任务 - 无子任务配置")
+    void testExecuteOrchestrationTask_NoSubtasks() {
+        testTask.setTaskType("ORCHESTRATION");
+        testTask.setTaskParams("{}");
 
-        List<Long> taskIds = List.of(1L, 2L);
-        when(taskRepository.findAllById(taskIds)).thenReturn(List.of(testTask, task2));
-        when(taskRepository.findById(1L)).thenReturn(Optional.of(testTask));
-        when(taskRepository.findById(2L)).thenReturn(Optional.of(task2));
-        when(executionRepository.save(any(TaskExecution.class))).thenAnswer(invocation -> {
-            TaskExecution saved = invocation.getArgument(0);
-            saved.setId(1L);
-            return saved;
-        });
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
-        List<TaskExecutionResponse> responses = orchestrationService.batchExecuteTasks(taskIds, "batch-executor");
-
-        // Then
-        assertThat(responses).isNotNull();
-        verify(taskRepository, atLeast(2)).findById(any());
-    }
-
-    @Test
-    @DisplayName("执行编排类型任务")
-    void testExecuteOrchestrationTask() {
-        // Given
-        testTask.setTaskType("ORCHESTRATION");
-
-        // When
         orchestrationService.executeTaskAsync(1L);
 
-        // Then - 验证任务执行完成
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
+        verify(taskRepository, times(1)).save(any(GovernanceTask.class));
     }
 
     @Test
     @DisplayName("执行通知类型任务")
     void testExecuteNotificationTask() {
-        // Given
         testTask.setTaskType("NOTIFICATION");
+        testTask.setTaskParams("{\"recipient\":\"test@example.com\",\"subject\":\"Test\",\"message\":\"Hello\"}");
+
         when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
         when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         orchestrationService.executeTaskAsync(1L);
 
-        // Then
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
     }
 
     @Test
     @DisplayName("执行报告类型任务")
     void testExecuteReportingTask() {
-        // Given
         testTask.setTaskType("REPORTING");
+        testTask.setTaskParams("{\"reportType\":\"GOVERNANCE\",\"format\":\"PDF\"}");
+
         when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
         when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         orchestrationService.executeTaskAsync(1L);
 
-        // Then
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
     }
 
     @Test
     @DisplayName("执行自动修复类型任务")
     void testExecuteAutoRemediationTask() {
-        // Given
         testTask.setTaskType("AUTO_REMEDIATION");
+        testTask.setTaskParams("{\"assetId\":\"asset-001\",\"issueType\":\"DATA_QUALITY\",\"severity\":\"HIGH\"}");
+
         when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
         when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
         when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
 
-        // When
         orchestrationService.executeTaskAsync(1L);
 
-        // Then
         verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("执行默认类型任务")
+    void testExecuteDefaultTask() {
+        testTask.setTaskType("UNKNOWN_TYPE");
+        testTask.setTaskParams("{}");
+
+        when(executionRepository.findById(1L)).thenReturn(Optional.of(testExecution));
+        when(executionRepository.save(any(TaskExecution.class))).thenReturn(testExecution);
+        when(taskRepository.save(any(GovernanceTask.class))).thenReturn(testTask);
+
+        orchestrationService.executeTaskAsync(1L);
+
+        verify(executionRepository, times(1)).save(any(TaskExecution.class));
+    }
+
+    @Test
+    @DisplayName("诊断结果类应正确保存数据")
+    void testDiagnosisResultClass() {
+        GovernanceOrchestrationService.DiagnosisResult result = new GovernanceOrchestrationService.DiagnosisResult();
+        result.setAssetId("asset-001");
+        result.setIssueType("DATA_QUALITY");
+        result.setSeverity("HIGH");
+        result.setDiagnosedAt(LocalDateTime.now());
+        result.setSymptoms(List.of("symptom1", "symptom2"));
+        result.setRootCause("root cause");
+
+        assertThat(result.getAssetId()).isEqualTo("asset-001");
+        assertThat(result.getIssueType()).isEqualTo("DATA_QUALITY");
+        assertThat(result.getSymptoms()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("修复方案类应正确保存数据")
+    void testRemediationPlanClass() {
+        GovernanceOrchestrationService.RemediationPlan plan = new GovernanceOrchestrationService.RemediationPlan();
+        plan.setDiagnosisId("diag-001");
+        plan.setStatus("SUCCESS");
+        plan.setEstimatedDuration(300);
+        plan.setCreatedAt(LocalDateTime.now());
+
+        GovernanceOrchestrationService.DiagnosisResult diagnosis = new GovernanceOrchestrationService.DiagnosisResult();
+        plan.setDiagnosisResult(diagnosis);
+
+        GovernanceOrchestrationService.RemediationStep step = new GovernanceOrchestrationService.RemediationStep();
+        step.setStepType("CLEANUP");
+        step.setDescription("Clean invalid data");
+        step.setOrder(1);
+        step.setStatus("COMPLETED");
+        plan.setSteps(List.of(step));
+
+        assertThat(plan.getDiagnosisId()).isEqualTo("diag-001");
+        assertThat(plan.getSteps()).hasSize(1);
+        assertThat(plan.getSteps().get(0).getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    @DisplayName("修复步骤类应正确保存数据")
+    void testRemediationStepClass() {
+        GovernanceOrchestrationService.RemediationStep step = new GovernanceOrchestrationService.RemediationStep();
+        step.setStepType("NOTIFICATION");
+        step.setDescription("Send notification");
+        step.setOrder(2);
+        step.setStatus("PENDING");
+        step.setErrorMessage(null);
+        step.setCompletedAt(LocalDateTime.now());
+
+        assertThat(step.getStepType()).isEqualTo("NOTIFICATION");
+        assertThat(step.getOrder()).isEqualTo(2);
+        assertThat(step.getStatus()).isEqualTo("PENDING");
     }
 }

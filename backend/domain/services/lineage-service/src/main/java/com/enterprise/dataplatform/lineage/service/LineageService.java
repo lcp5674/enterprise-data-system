@@ -38,6 +38,7 @@ public class LineageService {
     private final LineageSnapshotRepository lineageSnapshotRepository;
     private final LineageGraphRepository lineageGraphRepository;
     private final SqlLineageParser sqlLineageParser;
+    private final ImpactAnalysisService impactAnalysisService;
 
     /**
      * Create lineage relationship
@@ -195,7 +196,6 @@ public class LineageService {
     public ImpactAnalysisResponse analyzeImpact(String assetId, Integer depth) {
         int maxDepth = depth != null ? Math.min(depth, 10) : 5;
 
-        // Get all affected downstream assets
         List<GraphNode> affectedNodes = lineageGraphRepository.getDownstreamLineage(assetId, maxDepth);
 
         List<ImpactAnalysisResponse.AffectedAsset> affectedAssets = affectedNodes.stream()
@@ -204,34 +204,113 @@ public class LineageService {
                         .name(node.getName())
                         .type(node.getType())
                         .dependencyType("DIRECT")
-                        .criticalLevel("MEDIUM")
+                        .criticalLevel(determineCriticalLevel(node))
+                        .owner(buildOwnerInfo(node))
                         .build())
                 .collect(Collectors.toList());
 
-        // Count critical assets (those with high sensitivity level)
         int criticalCount = (int) affectedAssets.stream()
                 .filter(a -> "HIGH".equals(a.getCriticalLevel()))
                 .count();
 
+        int reportsCount = impactAnalysisService.countAffectedReports(assetId);
+        int dashboardsCount = impactAnalysisService.countAffectedDashboards(assetId);
+        int pipelinesCount = impactAnalysisService.countAffectedPipelines(assetId);
+        LocalDateTime estimatedImpactTime = impactAnalysisService.calculateEstimatedImpactTime(affectedNodes);
+        List<String> affectedProcesses = impactAnalysisService.getAffectedBusinessProcesses(assetId);
+
         ImpactAnalysisResponse.ImpactAnalysis analysis = ImpactAnalysisResponse.ImpactAnalysis.builder()
-                .directDownstreamCount(affectedAssets.size())
+                .directDownstreamCount((int) affectedNodes.stream().filter(n -> n.getDepth() != null && n.getDepth() == 1).count())
                 .totalDownstreamCount(affectedNodes.size())
                 .criticalAssetsCount(criticalCount)
-                .reportsAffectedCount(0) // Would be populated from report service
-                .estimatedImpactTime(LocalDateTime.now().plusHours(24).toString())
+                .reportsAffectedCount(reportsCount)
+                .dashboardsAffectedCount(dashboardsCount)
+                .pipelinesAffectedCount(pipelinesCount)
+                .estimatedImpactTime(estimatedImpactTime.toString())
+                .affectedBusinessProcesses(affectedProcesses)
                 .build();
+
+        List<ImpactAnalysisResponse.AffectedTask> affectedTasks = buildAffectedTasks(affectedNodes);
 
         return ImpactAnalysisResponse.builder()
                 .assetId(assetId)
                 .impactAnalysis(analysis)
                 .affectedAssets(affectedAssets)
-                .affectedTasks(Collections.emptyList())
-                .mitigationSuggestions(List.of(
-                        "Notify downstream task owners",
-                        "Pause affected tasks if needed",
-                        "Schedule maintenance window"
-                ))
+                .affectedTasks(affectedTasks)
+                .mitigationSuggestions(generateMitigationSuggestions(affectedNodes.size(), criticalCount))
                 .build();
+    }
+
+    private String determineCriticalLevel(GraphNode node) {
+        Map<String, Object> props = node.getProperties();
+        if (props == null) {
+            return "MEDIUM";
+        }
+        Object level = props.get("sensitivityLevel");
+        if (level != null) {
+            return level.toString().toUpperCase();
+        }
+        Object priority = props.get("priority");
+        if (priority != null) {
+            String p = priority.toString().toUpperCase();
+            if (p.contains("HIGH") || p.contains("CRITICAL") || p.contains("P0") || p.contains("P1")) {
+                return "HIGH";
+            }
+        }
+        return "MEDIUM";
+    }
+
+    private ImpactAnalysisResponse.OwnerInfo buildOwnerInfo(GraphNode node) {
+        Map<String, Object> props = node.getProperties();
+        if (props == null) {
+            return null;
+        }
+        String ownerId = String.valueOf(props.getOrDefault("ownerId", ""));
+        String ownerName = String.valueOf(props.getOrDefault("ownerName", ""));
+        String ownerEmail = String.valueOf(props.getOrDefault("ownerEmail", ""));
+        
+        if (ownerId.isEmpty() && ownerName.isEmpty()) {
+            return null;
+        }
+        
+        return ImpactAnalysisResponse.OwnerInfo.builder()
+                .id(ownerId)
+                .name(ownerName)
+                .email(ownerEmail)
+                .build();
+    }
+
+    private List<ImpactAnalysisResponse.AffectedTask> buildAffectedTasks(List<GraphNode> affectedNodes) {
+        return affectedNodes.stream()
+                .filter(node -> "TASK".equals(node.getType()) || "JOB".equals(node.getType()))
+                .map(node -> ImpactAnalysisResponse.AffectedTask.builder()
+                        .id(node.getAssetId())
+                        .name(node.getName())
+                        .type(node.getType())
+                        .status("PENDING")
+                        .owner(buildOwnerInfo(node))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private List<String> generateMitigationSuggestions(int affectedCount, int criticalCount) {
+        List<String> suggestions = new ArrayList<>();
+        suggestions.add("Notify downstream task owners about the potential impact");
+        
+        if (criticalCount > 0) {
+            suggestions.add("URGENT: Identify and protect critical assets that may be affected");
+            suggestions.add("Consider scheduling a maintenance window for critical changes");
+        }
+        
+        if (affectedCount > 10) {
+            suggestions.add("Review all affected pipelines and data assets before making changes");
+            suggestions.add("Consider implementing a phased rollout approach");
+        }
+        
+        suggestions.add("Run data quality checks after implementing changes");
+        suggestions.add("Monitor downstream systems for any anomalies");
+        
+        return suggestions;
     }
 
     /**

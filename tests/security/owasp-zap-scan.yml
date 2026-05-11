@@ -1,0 +1,558 @@
+# EDAMS OWASP ZAP 安全扫描配置
+# 用于自动化安全扫描和渗透测试
+# 等保三级安全评估
+
+scan:
+  # 目标URL配置
+  target_url: http://localhost:8080
+  context:
+    name: EDAMS_Context
+    include_urls:
+      - http://localhost:8080/api/*
+      - http://localhost:8080/api/v1/*
+      - http://localhost:8080/api/auth/*
+    exclude_urls:
+      - http://localhost:8080/actuator/health
+      - http://localhost:8080/swagger-ui/*
+      - http://localhost:8080/v3/api-docs/*
+
+  # Spider扫描配置 - 发现所有可用端点
+  spider:
+    enabled: true
+    max_depth: 10
+    thread_count: 10
+    max_children: 100
+    max_duration: 300
+    accept_cookies: true
+    handle_parameters: true
+    post_form: true
+
+  # AJAX Spider配置 - 发现JavaScript渲染的端点
+  ajax_spider:
+    enabled: true
+    max_duration: 120
+    browser_id: chrome-headless
+    click_default_elems: true
+    click_elements_once: true
+
+  # 主动扫描配置 - 执行实际攻击测试
+  active_scan:
+    enabled: true
+    policy: Standard
+    attack_policy: API
+    max_rule_time: 30
+    max_scan_time: 3600
+    delay_in_ms: 100
+    threads: 10
+
+  # 扫描报告配置
+  reports:
+    output_dir: reports/zap
+    formats:
+      - html
+      - json
+      - xml
+      - md
+    html:
+      filename: edams-security-report-{yyyy-MM-dd-HHmmss}.html
+      template: traditional
+    json:
+      filename: edams-security-report-{yyyy-MM-dd-HHmmss}.json
+    xml:
+      filename: edams-security-report-{yyyy-MM-dd-HHmmss}.xml
+    markdown:
+      filename: edams-security-report-{yyyy-MM-dd-HHmmss}.md
+    include_raw: true
+
+  # 认证配置
+  authentication:
+    method: form
+    config:
+      login_url: http://localhost:8080/api/auth/login
+      login_request_data: "{\"username\":\"{username}\",\"password\":\"{password}\"}"
+      username: admin
+      password: admin123
+      check_logged_in_regex: "\"/api/auth/validate\""
+      logged_in_indicator: "\"valid\":true"
+      logged_out_indicator: "\"valid\":false"
+
+  # 会话管理
+  session_management:
+    method: cookie
+
+# 安全规则配置
+rules:
+  # ==================== 高风险规则 ====================
+  # SQL注入
+  - id: 40012
+    name: SQL Injection
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: Critical - SQL注入可能导致数据泄露
+
+  - id: 40014
+    name: Cross Site Scripting (Reflected)
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - 反射型XSS可窃取用户会话
+
+  - id: 40017
+    name: Cross Site Scripting (Persistent)
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - 存储型XSS可持久控制用户浏览器
+
+  - id: 40018
+    name: Cross Site Scripting (DOM)
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - DOM型XSS客户端攻击
+
+  - id: 90020
+    name: Remote Code Execution
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - 远程代码执行可完全控制服务器
+
+  - id: 90021
+    name: Remote Code Execution - Spring4Shell
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - Spring4Shell远程代码执行漏洞
+
+  # ==================== 中风险规则 ====================
+  # Cookie安全
+  - id: 10010
+    name: Cookie Without HttpOnly Flag
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - Cookie缺少HttpOnly标志可能被JavaScript访问
+
+  - id: 10011
+    name: Cookie Without Secure Flag
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - Cookie缺少Secure标志可能在HTTP传输
+
+  - id: 10015
+    name: Re-examine Cache-control Directive
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 缓存控制配置需检查
+
+  # 信息泄露
+  - id: 10023
+    name: Directory Browsing
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 目录浏览可能泄露敏感文件
+
+  - id: 10024
+    name: Information Disclosure - Debug Error Messages
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 调试信息泄露可能暴露系统细节
+
+  - id: 10025
+    name: Information Disclosure - In URL
+    severity: MEDIUM
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - URL中包含敏感信息
+
+  - id: 10026
+    name: Information Disclosure - Suspicious Comments
+    severity: MEDIUM
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 可疑注释可能泄露系统信息
+
+  - id: 10027
+    name: Information Disclosure - Email Found
+    severity: INFO
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 邮箱地址发现
+
+  - id: 10028
+    name: Information Disclosure - Credit Card Number
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - 信用卡号泄露
+
+  - id: 10029
+    name: Information Disclosure - US Social Security Number
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - 社保号泄露
+
+  - id: 10030
+    name: Cookie Poisoning
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - Cookie投毒攻击
+
+  # 跨域配置
+  - id: 10038
+    name: Cross-Domain JavaScript Source File Inclusion
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 跨域JavaScript引用
+
+  - id: 10039
+    name: Cross-Domain File Inclusion
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - 跨域文件包含
+
+  # 认证和会话
+  - id: 10052
+    name: Cross-Site Request Forgery
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - CSRF攻击
+
+  - id: 10054
+    name: Missing Anti-CSRF Tokens
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 缺少CSRF Token
+
+  - id: 10055
+    name: CSP: Wildcard Directive
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - CSP配置过于宽松
+
+  - id: 10056
+    name: Source Code Disclosure - Git
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - Git源码泄露
+
+  - id: 10057
+    name: ShellShock
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - ShellShock漏洞
+
+  - id: 10061
+    name: Remote Code Execution - ShellShock
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - ShellShock远程代码执行
+
+  # ==================== 信息类规则 ====================
+  # XSS相关(低置信度)
+  - id: 40016
+    name: Cross Site Scripting (Reflected)
+    severity: LOW
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 反射型XSS(低置信度)
+
+  - id: 40019
+    name: Cross Site Scripting (Persistent)
+    severity: LOW
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 存储型XSS(低置信度)
+
+  # 服务器配置
+  - id: 10089
+    name: Modern Web Application
+    severity: INFO
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 现代Web应用
+
+  - id: 10094
+    name: Base64 Disclosure
+    severity: INFO
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - Base64编码内容
+
+  - id: 10095
+    name: Backup File Disclosure
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 备份文件泄露
+
+  - id: 10096
+    name: Timestamp Disclosure
+    severity: INFO
+    confidence: LOW
+    action: IGNORE
+    threshold: DEFAULT
+    info: 低风险 - 时间戳泄露
+
+  - id: 10097
+    name: Cross-Domain Misconfiguration
+    severity: INFO
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 跨域配置问题
+
+  - id: 10098
+    name: Cross-Domain Authenticated Interface
+    severity: INFO
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 跨域认证接口
+
+  - id: 10108
+    name: Weak Authentication Method
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 弱认证方法
+
+  # ==================== 等保三级专项规则 ====================
+  # 敏感数据保护
+  - id: 90003
+    name: Sensitive Data Exposure
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - 敏感数据暴露
+
+  - id: 90004
+    name: Insufficient Session Expiration
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 会话过期时间不足
+
+  - id: 90005
+    name: Weak Password Policy
+    severity: MEDIUM
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 弱密码策略
+
+  - id: 90006
+    name: Missing Content Security Policy
+    severity: LOW
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 缺少CSP策略
+
+  - id: 90007
+    name: Missing X-Content-Type-Options Header
+    severity: LOW
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 缺少X-Content-Type-Options头
+
+  - id: 90008
+    name: Missing X-Frame-Options Header
+    severity: LOW
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 缺少X-Frame-Options头
+
+  - id: 90009
+    name: Strict-Transport-Security Header Not Set
+    severity: LOW
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 低危 - 缺少HSTS头
+
+  - id: 90010
+    name: Private IP Disclosure
+    severity: INFO
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 私网IP泄露
+
+  - id: 90011
+    name: Email Address Disclosure
+    severity: INFO
+    confidence: LOW
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 邮箱地址泄露
+
+  - id: 90012
+    name: JDBC Injection
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - JDBC注入
+
+  - id: 90013
+    name: LDAP Injection
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - LDAP注入
+
+  - id: 90014
+    name: Path Traversal
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - 路径遍历
+
+  - id: 90015
+    name: External Redirect
+    severity: MEDIUM
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 中危 - 开放重定向
+
+  - id: 90016
+    name: Parameter Pollution
+    severity: INFO
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 信息 - 参数污染
+
+  - id: 90017
+    name: Server Side Request Forgery
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - SSRF攻击
+
+  - id: 90018
+    name: Formula Injection
+    severity: HIGH
+    confidence: MEDIUM
+    action: ENABLE
+    threshold: DEFAULT
+    info: 高危 - 公式注入
+
+  - id: 90019
+    name: Log4Shell
+    severity: HIGH
+    confidence: HIGH
+    action: ENABLE
+    threshold: DEFAULT
+    info: 严重 - Log4Shell漏洞
+
+# 忽略的规则(低风险或误报率高)
+ignore_rules:
+  - id: 10096  # Timestamp Disclosure - 低风险误报
+  - id: 10099  # User Agent Fuzzer - 扫描探测
+  - id: 10104  # WSDL文件检测 - 误报率高
+  - id: 10107  # Loosely Scoped Cookie - 低风险
+
+# 扫描配置参数
+scan_config:
+  # 并发控制
+  concurrency:
+    spider_threads: 10
+    ascan_threads: 10
+    max_concurrent_requests: 50
+
+  # 超时设置
+  timeout:
+    connection_timeout: 30
+    read_timeout: 60
+    spider_timeout: 300
+    ascan_timeout: 3600
+
+  # 重试策略
+  retry:
+    max_retries: 3
+    retry_delay_ms: 1000
+
+  # 代理配置
+  proxy:
+    enabled: false
+    host: localhost
+    port: 8888
+
+  # SSL配置
+  ssl:
+    verify_cert: false
+    allow_weak_ciphers: false
+
+# 告警管理
+alert:
+  risk_levels:
+    - HIGH
+    - MEDIUM
+  min_confidence: 50
+  auto_filter_duplicates: true
+  mergeSimilarAlerts: true
+
+# CI/CD集成
+cicd:
+  enabled: false
+  fail_on_high: true
+  fail_on_medium: false
+  fail_on_low: false
+  output_file: reports/security-scan-results.json

@@ -1,0 +1,303 @@
+groups:
+  - name: edams_performance
+    interval: 30s
+    rules:
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{uri=~"/api/.*"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: api
+        annotations:
+          summary: "API响应时间过高"
+          description: "P95响应时间超过500ms，当前值: {{ $value | humanizeDuration }}"
+          runbook_url: "https://wiki.example.com/runbooks/api-high-latency"
+
+      - alert: APIVeryHighLatency
+        expr: histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{uri=~"/api/.*"}[5m])) > 1
+        for: 3m
+        labels:
+          severity: critical
+          service: edams
+          component: api
+        annotations:
+          summary: "API响应时间严重过高"
+          description: "P99响应时间超过1000ms，当前值: {{ $value | humanizeDuration }}"
+          runbook_url: "https://wiki.example.com/runbooks/api-critical-latency"
+
+      - alert: APIHighErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"5.."}[5m]) / rate(http_server_requests_seconds_count[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          service: edams
+          component: api
+        annotations:
+          summary: "API错误率过高"
+          description: "API 5xx错误率超过1%，当前值: {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.example.com/runbooks/api-high-error-rate"
+
+      - alert: APIHigh4xxErrorRate
+        expr: rate(http_server_requests_seconds_count{status=~"4.."}[5m]) / rate(http_server_requests_seconds_count[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: api
+        annotations:
+          summary: "API客户端错误率过高"
+          description: "API 4xx错误率超过5%，当前值: {{ $value | humanizePercentage }}"
+
+  - name: edams_jvm
+    interval: 30s
+    rules:
+      - alert: JVMHeapHighUsage
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+          component: jvm
+        annotations:
+          summary: "JVM堆内存使用率过高"
+          description: "JVM堆内存使用率超过85%，当前值: {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.example.com/runbooks/jvm-heap-high"
+
+      - alert: JVMHeapCriticalUsage
+        expr: jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"} > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: edams
+          component: jvm
+        annotations:
+          summary: "JVM堆内存使用率严重过高"
+          description: "JVM堆内存使用率超过95%，当前值: {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.example.com/runbooks/jvm-heap-critical"
+
+      - alert: JVMGCHighFrequency
+        expr: rate(jvm_gc_pause_seconds_count[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: jvm
+        annotations:
+          summary: "JVM GC频率过高"
+          description: "JVM GC频率超过10次/秒，可能存在内存问题"
+
+      - alert: JVMGCLongPause
+        expr: histogram_quantile(0.95, rate(jvm_gc_pause_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: jvm
+        annotations:
+          summary: "JVM GC暂停时间过长"
+          description: "P95 GC暂停时间超过500ms，当前值: {{ $value | humanizeDuration }}"
+
+      - alert: JVMThreadCountHigh
+        expr: jvm_threads_current > 500
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+          component: jvm
+        annotations:
+          summary: "JVM线程数过高"
+          description: "JVM当前线程数超过500，当前值: {{ $value }}"
+
+  - name: edams_database
+    interval: 30s
+    rules:
+      - alert: DBConnectionPoolExhausted
+        expr: hikaricp_connections_active / hikaricp_connections_max > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          service: edams
+          component: database
+        annotations:
+          summary: "数据库连接池即将耗尽"
+          description: "连接池使用率超过90%，当前值: {{ $value | humanizePercentage }}"
+          runbook_url: "https://wiki.example.com/runbooks/db-pool-exhausted"
+
+      - alert: DBConnectionPoolWarning
+        expr: hikaricp_connections_active / hikaricp_connections_max > 0.75
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+          component: database
+        annotations:
+          summary: "数据库连接池使用率较高"
+          description: "连接池使用率超过75%，当前值: {{ $value | humanizePercentage }}"
+
+      - alert: DBConnectionWaitTime
+        expr: histogram_quantile(0.95, rate(hikaricp_connections_timeout_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: database
+        annotations:
+          summary: "数据库连接等待时间过长"
+          description: "连接等待时间P95超过100ms"
+
+      - alert: DBQuerySlow
+        expr: histogram_quantile(0.95, rate(hikaricp_connections_usage_seconds_bucket{state="Used"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: database
+        annotations:
+          summary: "数据库查询时间过长"
+          description: "数据库查询P95时间超过1秒"
+
+  - name: edams_kafka
+    interval: 30s
+    rules:
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_records_lag_max > 10000
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+          component: kafka
+        annotations:
+          summary: "Kafka消费者延迟过高"
+          description: "消费者延迟超过10000条消息"
+          runbook_url: "https://wiki.example.com/runbooks/kafka-consumer-lag"
+
+      - alert: KafkaConsumerLagCritical
+        expr: kafka_consumer_records_lag_max > 50000
+        for: 5m
+        labels:
+          severity: critical
+          service: edams
+          component: kafka
+        annotations:
+          summary: "Kafka消费者延迟严重过高"
+          description: "消费者延迟超过50000条消息，可能导致数据积压"
+
+      - alert: KafkaProducerErrorRate
+        expr: rate(kafka_producer_record_send_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: kafka
+        annotations:
+          summary: "Kafka生产者错误率过高"
+          description: "Kafka生产者发送错误率超过10次/秒"
+
+  - name: edams_neo4j
+    interval: 30s
+    rules:
+      - alert: Neo4jHighQueryTime
+        expr: neo4j_statement_execution_time_seconds{quantile="0.95"} > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: neo4j
+        annotations:
+          summary: "Neo4j查询时间过长"
+          description: "P95查询时间超过500ms，当前值: {{ $value | humanizeDuration }}"
+
+      - alert: Neo4jHighMemoryUsage
+        expr: neo4j_memory_usage_bytes / neo4j_memory_max_bytes > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+          component: neo4j
+        annotations:
+          summary: "Neo4j内存使用率过高"
+          description: "Neo4j内存使用率超过85%，当前值: {{ $value | humanizePercentage }}"
+
+      - alert: Neo4jTransactionTimeout
+        expr: rate(neo4j_transaction_timeout_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: neo4j
+        annotations:
+          summary: "Neo4j事务超时过多"
+          description: "事务超时频率超过5次/秒"
+
+  - name: edams_elasticsearch
+    interval: 30s
+    rules:
+      - alert: ElasticsearchHighSearchLatency
+        expr: histogram_quantile(0.95, rate(elasticsearch_search_query_time_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: elasticsearch
+        annotations:
+          summary: "Elasticsearch搜索延迟过高"
+          description: "P95搜索延迟超过1秒，当前值: {{ $value | humanizeDuration }}"
+
+      - alert: ElasticsearchHighIndexLatency
+        expr: histogram_quantile(0.95, rate(elasticsearch_indexing_index_time_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: edams
+          component: elasticsearch
+        annotations:
+          summary: "Elasticsearch索引延迟过高"
+          description: "P95索引延迟超过500ms"
+
+  - name: edams_service_health
+    interval: 15s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"edams-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: edams
+        annotations:
+          summary: "服务实例不可用"
+          description: "服务 {{ $labels.instance }} 不可用超过1分钟"
+          runbook_url: "https://wiki.example.com/runbooks/service-down"
+
+      - alert: HighRequestRate
+        expr: rate(http_server_requests_seconds_count[1m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+          service: edams
+        annotations:
+          summary: "请求速率较高"
+          description: "当前请求速率: {{ $value | humanize }} req/s"
+
+  - name: edams_business_metrics
+    interval: 60s
+    rules:
+      - alert: LowAssetCreationRate
+        expr: rate(edams_assets_created_total[5m]) < 1
+        for: 15m
+        labels:
+          severity: info
+          service: edams
+        annotations:
+          summary: "资产创建速率过低"
+          description: "过去15分钟内资产创建速率低于1个/5分钟"
+
+      - alert: HighQualityCheckFailure
+        expr: rate(edams_quality_checks_failed_total[5m]) / rate(edams_quality_checks_total[5m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: edams
+        annotations:
+          summary: "质量检测失败率过高"
+          description: "质量检测失败率超过20%，当前值: {{ $value | humanizePercentage }}"

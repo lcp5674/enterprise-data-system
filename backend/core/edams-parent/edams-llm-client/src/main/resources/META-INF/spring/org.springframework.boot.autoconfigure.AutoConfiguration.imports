@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.enterprise.edams.llm.client.config.LLMClientAutoConfiguration

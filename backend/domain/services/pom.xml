@@ -30,6 +30,7 @@
     </properties>
     
     <modules>
+        <module>iot-edge-service</module>
         <module>lineage-service</module>
         <module>standard-service</module>
         <module>quality-service</module>
@@ -40,6 +41,9 @@
         <module>index-service</module>
         <module>analytics-service</module>
         <module>rule-engine-service</module>
+        <module>ethics-service</module>
+        <module>classification-service</module>
+        <module>masking-service</module>
     </modules>
     
     <dependencyManagement>

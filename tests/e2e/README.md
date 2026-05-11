@@ -1,148 +1,259 @@
-# EDAMS E2E 测试
+# EDAMS E2E Tests
 
-本目录包含EDAMS项目的端到端（E2E）测试，使用Playwright框架编写。
+本目录包含EDAMS项目的前端E2E测试，使用Playwright实现。
+
+## 技术栈
+
+- **Playwright** - E2E测试框架
+- **TypeScript** - 测试代码语言
+- **@playwright/test** - 测试运行器
 
 ## 目录结构
 
 ```
-tests/e2e/
-├── auth.spec.ts              # 认证模块测试
-├── user-management.spec.ts   # 用户管理测试
-├── asset-lifecycle.spec.ts   # 资产管理与生命周期测试
-├── governance-workflow.spec.ts # 数据治理与审批流测试
-├── playwright.config.ts      # Playwright配置文件
-└── README.md                 # 本文件
+e2e/
+├── helpers/                    # 测试辅助工具
+│   ├── test-fixtures.ts        # 测试夹具定义
+│   └── page-helpers.ts         # 页面操作辅助函数
+├── *.spec.ts                   # E2E测试用例
+├── playwright.config.ts         # Playwright配置
+├── package.json                 # 依赖配置
+└── README.md
 ```
 
-## 前置要求
+## 测试用例
 
-1. Node.js >= 18.x
-2. npm >= 9.x
-3. 后端服务运行在 http://localhost:8080
-4. 前端服务运行在 http://localhost:3000
+### 资产生命周期测试 (asset-lifecycle.spec.ts)
 
-## 安装依赖
+- 创建数据资产并完成生命周期
+- 资产搜索功能
+- 资产筛选功能
+- 资产收藏功能
+- 资产详情页签切换
+- 批量选择资产
+- 批量删除资产
+- 批量导出资产
+- 下载导入模板
+- 导入资产数据
+
+### 数据生命周期测试 (data-lifecycle.spec.ts)
+
+- 完整生命周期流转 (DRAFT -> PENDING_REVIEW -> APPROVED -> ACTIVE -> ARCHIVED)
+- 生命周期状态转换异常处理
+- 审核拒绝后状态管理
+- 从已废弃状态恢复
+- 生命周期历史记录查看
+- 生命周期状态过滤器
+- 资产认证申请
+
+### 数据分类分级测试 (classification.spec.ts)
+
+- 查看数据分类概览
+- 查看分类统计图表
+- 查看敏感数据分布
+- 查看分类层级结构
+- 搜索分类
+- 查看分类详情
+- 敏感数据类型分布
+- 敏感数据扫描结果
+- 字段级敏感信息
+- 风险评估
+- 导出敏感数据报告
+- 脱敏规则管理
+- 合规性检查
+
+### 质量检查测试 (quality-check.spec.ts)
+
+- 执行质量检查
+- 查看质量概览仪表盘
+- 查看质量趋势图表
+- 按规则类型筛选
+- 质量规则管理 (CRUD)
+- 规则模板使用
+- 检查历史查看
+- 检查详情查看
+- 质量问题追踪
+- 问题认领、解决、转派、忽略
+
+### 认证流程测试 (auth.spec.ts)
+
+- 登录成功
+- 登录失败处理
+- 注册新用户
+- 注册表单验证
+- MFA验证流程
+- Token过期处理
+- 登出功能
+- 会话管理
+
+### 治理工作流测试 (governance-workflow.spec.ts)
+
+- 查看治理仪表盘
+- 创建治理策略
+- 启用/禁用策略
+- AI推荐建议
+- 质量趋势分析
+- 发起审批流程
+- 查看待我审批
+- 审批通过/拒绝
+- 审批流程查询
+- 流程图查看
+- 数据标准管理
+- 血缘关系可视化
+
+## 运行测试
+
+### 安装依赖
 
 ```bash
 cd tests/e2e
 npm install
-npx playwright install
 ```
 
-## 运行测试
+### 安装浏览器
+
+```bash
+npm run install:browsers
+```
 
 ### 运行所有测试
+
 ```bash
-npx playwright test
+npm test
+```
+
+### 运行带UI的测试
+
+```bash
+npm run test:ui
+```
+
+### 运行特定浏览器测试
+
+```bash
+npm run test:chromium
+npm run test:firefox
+```
+
+### 运行移动端测试
+
+```bash
+npm run test:mobile
 ```
 
 ### 运行特定测试文件
+
 ```bash
 npx playwright test auth.spec.ts
+npx playwright test asset-lifecycle.spec.ts
 ```
 
-### 运行特定标签的测试
+### 运行特定测试用例
+
 ```bash
-npx playwright test --grep "登录"
+npx playwright test -g "登录成功"
 ```
 
-### 在UI模式下运行
+### Debug模式
+
 ```bash
-npx playwright test --ui
+npm run test:debug
 ```
 
-### 生成测试报告
+## 配置说明
+
+在 `playwright.config.ts` 中配置：
+
+```typescript
+export default defineConfig({
+  testDir: './',
+  baseURL: process.env.BASE_URL || 'http://localhost:3000',
+  timeout: 120000,
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'Mobile Chrome', use: { ...devices['Pixel 5'] } },
+  ],
+});
+```
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| BASE_URL | 测试目标URL | http://localhost:3000 |
+| CI | 是否在CI环境 | - |
+| HEADED | 是否使用有头模式 | false |
+
+## 辅助函数
+
+使用 `helpers/page-helpers.ts` 中的辅助函数：
+
+```typescript
+import { login, logout, createTestAsset, navigateToAsset } from './helpers/page-helpers';
+
+// 登录
+await login(page);
+
+// 创建测试资产
+const assetName = await createTestAsset(page);
+
+// 导航到资产详情
+await navigateToAsset(page, assetName);
+
+// 登出
+await logout(page);
+```
+
+## 测试报告
+
+测试完成后，生成以下报告：
+
+- `playwright-report/` - HTML报告
+- `playwright-results.json` - JSON格式结果
+
+查看HTML报告：
+
 ```bash
-npx playwright test --reporter=html
-open playwright-report/index.html
+npm run report
 ```
 
-## 测试覆盖
+## 持续集成
 
-### 认证模块 (auth.spec.ts)
-- [x] 登录成功
-- [x] 登录失败 - 错误密码
-- [x] 登录失败 - 用户不存在
-- [x] 注册新用户
-- [x] 注册表单验证
-- [x] MFA验证流程
-- [x] Token过期处理
-- [x] 登出功能
-- [x] 记住登录状态
+在CI环境中运行：
 
-### 用户管理 (user-management.spec.ts)
-- [x] 用户列表加载
-- [x] 分页功能
-- [x] 搜索用户
-- [x] 创建新用户
-- [x] 编辑用户
-- [x] 删除用户
-- [x] 禁用/启用用户
-- [x] 重置密码
-- [x] 分配角色
-- [x] 部门管理
-
-### 资产管理 (asset-lifecycle.spec.ts)
-- [x] 资产列表加载
-- [x] 资产搜索
-- [x] 按类型筛选
-- [x] 查看资产详情
-- [x] 注册新资产
-- [x] 查看生命周期历史
-- [x] 创建生命周期记录
-- [x] 归档资产
-- [x] 版本历史查看
-- [x] 版本对比
-- [x] 版本回滚
-- [x] 执行质量检查
-- [x] 查看质量报告
-
-### 数据治理 (governance-workflow.spec.ts)
-- [x] 查看治理仪表盘
-- [x] 创建治理策略
-- [x] 启用/禁用策略
-- [x] AI推荐建议
-- [x] 质量趋势分析
-- [x] 发起审批流程
-- [x] 查看待我审批
-- [x] 审批通过
-- [x] 审批拒绝
-- [x] 审批流程查询
-- [x] 查看流程图
-- [x] 查看数据标准列表
-- [x] 创建数据标准
-- [x] 执行合规检查
-- [x] 查看资产血缘
-- [x] 血缘关系可视化
-- [x] 上游/下游血缘
-- [x] 影响分析
-
-## CI/CD集成
-
-在CI环境中运行:
 ```bash
-CI=true npx playwright test
+npm run test:ci
 ```
 
-## 调试
+GitLab CI配置示例：
 
-### 查看测试录像
-1. 运行测试后，打开 `playwright-report/index.html`
-2. 点击失败的测试
-3. 点击 "Traces" 查看操作录像
-
-### 本地调试
-```bash
-npx playwright test --debug
+```yaml
+e2e-tests:
+  stage: test
+  script:
+    - cd tests/e2e
+    - npm ci
+    - npx playwright install --with-deps
+    - npm run test:ci
+  artifacts:
+    reports:
+      junit: playwright-results.xml
+    paths:
+      - playwright-report/
 ```
 
-## 常见问题
+## 注意事项
 
-### Q: 测试报找不到元素
-A: 检查页面是否完全加载，增加适当的等待时间。
+1. 测试前确保前端服务已启动
+2. 测试会创建/修改数据，建议使用测试环境
+3. 某些测试依赖特定的初始数据状态
+4. 移动端测试需要真机或模拟器支持
 
-### Q: 测试在CI失败但本地通过
-A: 确保CI环境的服务端口可用，检查网络策略。
+## 最佳实践
 
-### Q: 如何跳过某些测试?
-A: 使用 `test.skip()` 或 `test.fixme()` 标记。
+1. 每个测试用例应独立，不依赖其他测试的执行结果
+2. 使用显式等待而非固定延迟
+3. 测试失败时自动截图和录制视频
+4. 定期清理测试数据
+5. 使用page objects模式组织页面元素定位器

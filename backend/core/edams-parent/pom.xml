@@ -84,6 +84,7 @@
         <!-- P3服务 -->
         <module>edams-knowledge</module>
         <module>edams-llm</module>
+        <module>edams-llm-client</module>
         <module>edams-lifecycle</module>
         <module>edams-collaboration</module>
         <module>edams-aiops</module>

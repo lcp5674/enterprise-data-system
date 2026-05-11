@@ -1,0 +1,134 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: iot-edge-service
+
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        group: IOT_EDGE_GROUP
+      config:
+        enabled: true
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:public}
+        file-extension: yml
+        shared-configs:
+          - data-id: common.yml
+            group: COMMON_GROUP
+            refresh: true
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:edams_iot}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root123}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  data:
+    mongodb:
+      uri: mongodb://${MONGODB_HOST:localhost}:${MONGODB_PORT:27017}/iot_edge
+      database: iot_edge
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: iot-edge-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  sql:
+    init:
+      mode: never
+      schema-locations: classpath:db/schema.sql
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+iot:
+  mqtt:
+    broker-url: tcp://${MQTT_HOST:localhost}:${MQTT_PORT:1883}
+    username: ${MQTT_USERNAME:admin}
+    password: ${MQTT_PASSWORD:public}
+    keep-alive-interval: 60
+    connection-timeout: 30
+    clean-session: false
+    qos: 1
+    auto-reconnect: true
+    max-reconnect-attempts: 10
+    initial-reconnect-delay: 1000
+    max-reconnect-delay: 30000
+    client-id-prefix: edams-iot-edge
+    device-topic-prefix: edams/devices
+    command-topic: edams/commands
+    data-topic: edams/data
+
+  data-collection:
+    batch-size: 100
+    flush-interval-ms: 5000
+    max-retries: 3
+    retention-days: 30
+
+  emqx:
+    api-url: http://${EMQX_HOST:localhost}:${EMQX_PORT:8081}
+    api-key: ${EMQX_API_KEY:}
+    api-secret: ${EMQX_API_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+logging:
+  level:
+    root: INFO
+    com.enterprise.dataplatform.iot: DEBUG
+    org.eclipse.paho: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

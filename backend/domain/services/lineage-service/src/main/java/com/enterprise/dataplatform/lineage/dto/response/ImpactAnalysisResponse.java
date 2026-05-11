@@ -37,7 +37,10 @@ public class ImpactAnalysisResponse {
         private Integer totalDownstreamCount;
         private Integer criticalAssetsCount;
         private Integer reportsAffectedCount;
+        private Integer dashboardsAffectedCount;
+        private Integer pipelinesAffectedCount;
         private String estimatedImpactTime;
+        private List<String> affectedBusinessProcesses;
     }
 
     @Data

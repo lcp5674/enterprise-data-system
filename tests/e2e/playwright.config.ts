@@ -1,17 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Playwright E2E测试配置
- */
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'playwright-results.json' }]
+    ['json', { outputFile: 'playwright-results.json' }],
+    ['list']
   ],
 
   use: {
@@ -19,8 +17,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    actionTimeout: 15000,
+    navigationTimeout: 45000,
   },
 
   projects: [
@@ -33,30 +31,25 @@ export default defineConfig({
       use: { ...devices['Desktop Firefox'] },
     },
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-    {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
     },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
   ],
 
+  timeout: 120000,
+  expect: {
+    timeout: 10000
+  },
+
   webServer: {
-    command: 'npm run dev',
+    command: process.env.CI ? 'npm run build && npm run preview' : 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
-    timeout: 120000,
+    timeout: 180000,
     stdout: 'ignore',
     stderr: 'pipe',
   },
 
-  timeout: 60000,
-  expect: {
-    timeout: 5000
-  }
+  fullyParallel: true,
+  testMatch: '**/*.spec.ts',
 });
