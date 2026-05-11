@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -54,6 +55,9 @@ public class GovernanceOrchestrationService {
     private static final String SUB_TASK_TYPE_REPORTING = "REPORTING";
     
     private final Map<String, Object> executionLogs = new ConcurrentHashMap<>();
+    
+    @Value("${governance.admin.emails:admin@example.com}")
+    private String adminEmailList;
 
     /**
      * 执行任务（支持DAG编排）
@@ -129,7 +133,7 @@ public class GovernanceOrchestrationService {
     }
 
     /**
-     * 异步执行任务
+     * 异步执行任务（带重试机制）
      */
     public void executeTaskAsync(Long executionId) {
         log.info("异步执行任务: {}", executionId);
@@ -141,27 +145,125 @@ public class GovernanceOrchestrationService {
             return;
         }
 
-        try {
-            performTaskExecution(execution);
+        int retryCount = 0;
+        int maxRetries = this.maxRetry;
+        List<String> retryReasons = new ArrayList<>();
 
-            execution.setExecutionStatus("COMPLETED");
-            execution.setResultStatus("SUCCESS");
-            execution.setEndTime(LocalDateTime.now());
-            execution.setExecutionTimeMs(System.currentTimeMillis() - startTime);
+        while (retryCount <= maxRetries) {
+            try {
+                performTaskExecution(execution);
 
-        } catch (Exception e) {
-            log.error("任务执行失败: {}", executionId, e);
-            execution.setExecutionStatus("FAILED");
-            execution.setResultStatus("FAILED");
-            execution.setErrorMessage(e.getMessage());
-            execution.setEndTime(LocalDateTime.now());
-            execution.setExecutionTimeMs(System.currentTimeMillis() - startTime);
+                execution.setExecutionStatus("COMPLETED");
+                execution.setResultStatus("SUCCESS");
+                execution.setRetryCount(retryCount);
+                execution.setEndTime(LocalDateTime.now());
+                execution.setExecutionTimeMs(System.currentTimeMillis() - startTime);
 
-            updateTaskToFailed(execution.getTask().getId(), e.getMessage());
+                if (retryCount > 0) {
+                    log.info("任务执行成功（重试{}次后）: executionId={}", 
+                            retryCount, executionId);
+                } else {
+                    log.info("任务执行成功: executionId={}", executionId);
+                }
+
+                executionRepository.save(execution);
+                triggerDownstreamTasks(execution.getTask().getId());
+                return;
+
+            } catch (Exception e) {
+                retryCount++;
+                String errorMsg = e.getMessage();
+                retryReasons.add(String.format("[Attempt %d] %s", retryCount, errorMsg));
+
+                if (retryCount > maxRetries) {
+                    log.error("任务执行失败，已达到最大重试次数: executionId={}, attempts={}, error={}", 
+                            executionId, retryCount, errorMsg);
+
+                    execution.setExecutionStatus("FAILED");
+                    execution.setResultStatus("FAILED");
+                    execution.setErrorMessage(errorMsg);
+                    execution.setRetryCount(retryCount);
+                    execution.setRetryReasons(retryReasons);
+                    execution.setEndTime(LocalDateTime.now());
+                    execution.setExecutionTimeMs(System.currentTimeMillis() - startTime);
+
+                    executionRepository.save(execution);
+                    updateTaskToFailed(execution.getTask().getId(), errorMsg);
+                    sendExecutionFailedAlert(execution, errorMsg);
+                    return;
+                }
+
+                long retryDelay = calculateRetryDelay(retryCount);
+                log.warn("任务执行失败，准备重试: executionId={}, attempt={}/{}, delay={}ms, error={}", 
+                        executionId, retryCount, maxRetries, retryDelay, errorMsg);
+
+                execution.setExecutionStatus("RETRYING");
+                execution.setRetryCount(retryCount);
+                execution.setLastErrorMessage(errorMsg);
+                executionRepository.save(execution);
+
+                try {
+                    Thread.sleep(retryDelay);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("重试等待被中断: executionId={}", executionId);
+                    break;
+                }
+            }
         }
+    }
 
-        executionRepository.save(execution);
-        triggerDownstreamTasks(execution.getTask().getId());
+    private long calculateRetryDelay(int retryCount) {
+        long baseDelay = 1000L;
+        long maxDelay = 60000L;
+        long delay = baseDelay * (long) Math.pow(2, retryCount - 1);
+        long jitter = (long) (delay * 0.1 * (Math.random() * 2 - 1));
+        return Math.min(delay + jitter, maxDelay);
+    }
+
+    private void sendExecutionFailedAlert(TaskExecution execution, String errorMsg) {
+        try {
+            GovernanceTask task = execution.getTask();
+            
+            Map<String, Object> notificationParams = new HashMap<>();
+            notificationParams.put("recipient", getAdminRecipients());
+            notificationParams.put("title", "【告警】治理任务执行失败");
+            notificationParams.put("message", buildFailureAlertMessage(task, errorMsg));
+            notificationParams.put("channel", "EMAIL");
+            notificationParams.put("priority", "HIGH");
+            
+            CompletableFuture.runAsync(() -> {
+                try {
+                    executeNotificationSubTask(notificationParams);
+                } catch (Exception e) {
+                    log.error("发送任务失败告警失败: taskId={}", task.getId(), e);
+                }
+            });
+            
+        } catch (Exception e) {
+            log.error("准备发送告警时异常: executionId={}", execution.getId(), e);
+        }
+    }
+
+    private String buildFailureAlertMessage(GovernanceTask task, String errorMsg) {
+        return String.format(
+                "治理任务执行失败告警\n\n" +
+                "任务编号：%s\n" +
+                "任务名称：%s\n" +
+                "任务类型：%s\n" +
+                "错误信息：%s\n" +
+                "执行时间：%s\n\n" +
+                "请及时检查并处理。",
+                task.getTaskCode(),
+                task.getTaskName(),
+                task.getTaskType(),
+                errorMsg,
+                LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+        );
+    }
+
+    private String getAdminRecipients() {
+        return adminEmailList;
     }
 
     /**
@@ -485,14 +587,89 @@ public class GovernanceOrchestrationService {
      * 执行报告子任务
      */
     private Map<String, Object> executeReportingSubTask(Map<String, Object> params) {
-        String reportType = String.valueOf(params.getOrDefault("reportType", ""));
+        String reportType = String.valueOf(params.getOrDefault("reportType", "GOVERNANCE"));
+        String format = String.valueOf(params.getOrDefault("format", "PDF"));
+        String assetIdsStr = String.valueOf(params.getOrDefault("assetIds", ""));
+        String executor = String.valueOf(params.getOrDefault("executor", "system"));
+        String template = String.valueOf(params.getOrDefault("template", "default"));
         
-        log.info("生成报告: type={}", reportType);
+        log.info("执行报告生成任务: type={}, format={}, assets={}", 
+                reportType, format, assetIdsStr);
         
         Map<String, Object> result = new HashMap<>();
+        result.put("subTaskType", SUB_TASK_TYPE_REPORTING);
         result.put("reportType", reportType);
-        result.put("generated", true);
-        result.put("generatedAt", LocalDateTime.now().toString());
+        result.put("format", format);
+        
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("reportType", reportType);
+            requestBody.put("format", format.toUpperCase());
+            requestBody.put("template", template);
+            requestBody.put("generatedBy", executor);
+            requestBody.put("parameters", params);
+            
+            List<String> assetIds = new ArrayList<>();
+            if (StringUtils.isNotBlank(assetIdsStr)) {
+                assetIds = Arrays.asList(assetIdsStr.split(","));
+            }
+            requestBody.put("assetIds", assetIds);
+            
+            if (params.containsKey("startDate")) {
+                requestBody.put("startDate", params.get("startDate"));
+            }
+            if (params.containsKey("endDate")) {
+                requestBody.put("endDate", params.get("endDate"));
+            }
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    REPORT_SERVICE_URL + "/generate",
+                    requestBody,
+                    Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseData = response.getBody();
+                Map<String, Object> data = (Map<String, Object>) responseData.get("data");
+                
+                if (data != null) {
+                    result.put("reportId", data.getOrDefault("reportId", ""));
+                    result.put("reportName", data.getOrDefault("reportName", reportType + "_Report"));
+                    result.put("reportUrl", data.getOrDefault("reportUrl", ""));
+                    result.put("downloadUrl", data.getOrDefault("downloadUrl", ""));
+                    result.put("fileSize", data.getOrDefault("fileSize", 0L));
+                    result.put("pageCount", data.getOrDefault("pageCount", 0));
+                    result.put("generatedAt", data.getOrDefault("generatedAt", LocalDateTime.now().toString()));
+                    result.put("generatedBy", data.getOrDefault("generatedBy", executor));
+                    result.put("generated", true);
+                    result.put("success", true);
+                    
+                    log.info("报告生成成功: reportId={}, url={}", 
+                            result.get("reportId"), result.get("downloadUrl"));
+                } else {
+                    throw new RuntimeException("报告服务返回数据为空");
+                }
+            } else {
+                String errorMsg = "HTTP " + response.getStatusCode().value();
+                log.error("报告服务调用失败: {}", errorMsg);
+                result.put("generated", false);
+                result.put("success", false);
+                result.put("error", errorMsg);
+            }
+            
+        } catch (RestClientException e) {
+            log.error("报告服务调用异常: type={}, error={}", reportType, e.getMessage(), e);
+            result.put("generated", false);
+            result.put("success", false);
+            result.put("error", "报告服务不可用: " + e.getMessage());
+            result.put("errorType", "SERVICE_UNAVAILABLE");
+        } catch (Exception e) {
+            log.error("报告生成异常: type={}", reportType, e);
+            result.put("generated", false);
+            result.put("success", false);
+            result.put("error", "报告生成异常: " + e.getMessage());
+            result.put("errorType", "GENERATION_ERROR");
+        }
         
         return result;
     }
