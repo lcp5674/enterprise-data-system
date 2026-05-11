@@ -3,9 +3,9 @@ spring:
     name: edams-intelligent-analysis
 
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:edams}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=utf8
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
+    password: ${DB_PASSWORD:root123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       minimum-idle: 5
@@ -14,21 +14,22 @@ spring:
       pool-name: AnalysisHikariCP
       max-lifetime: 1800000
       connection-timeout: 30000
+      connection-test-query: SELECT 1
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: false
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
+        format_sql: ${FORMAT_SQL:false}
 
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:redis123}
       database: 0
       timeout: 5000ms
       lettuce:
@@ -43,43 +44,62 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: edams-analysis-group
+      auto-offset-reset: earliest
 
 server:
   port: ${SERVER_PORT:8088}
+  servlet:
+    context-path: /analysis
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
 
 # Analysis Service Configuration
 analysis:
   task:
-    default-batch-size: 5
-    default-sample-row-count: 100
-    max-concurrent-tasks: 3
+    default-batch-size: ${TASK_BATCH_SIZE:5}
+    default-sample-row-count: ${SAMPLE_ROW_COUNT:100}
+    max-concurrent-tasks: ${MAX_CONCURRENT_TASKS:3}
     schedule-cron: "0 * * * * ?"
   llm:
-    default-timeout: 120000
-    default-max-tokens: 4096
-    default-temperature: 0.7
-    retry-attempts: 3
-    retry-delay: 1000
+    default-timeout: ${LLM_TIMEOUT:120000}
+    default-max-tokens: ${LLM_MAX_TOKENS:4096}
+    default-temperature: ${LLM_TEMPERATURE:0.7}
+    retry-attempts: ${LLM_RETRY_ATTEMPTS:3}
+    retry-delay: ${LLM_RETRY_DELAY:1000}
   cache:
-    enabled: true
-    ttl: 86400
+    enabled: ${CACHE_ENABLED:true}
+    ttl: ${CACHE_TTL:86400}
+  docker:
+    internal-host: ${DOCKER_INTERNAL_HOST:host.docker.internal}
 
 # Logging
 logging:
   level:
-    root: INFO
-    com.enterprise.edams.analysis: DEBUG
+    root: ${LOG_LEVEL:INFO}
+    com.enterprise.edams.analysis: ${LOG_LEVEL_ANALYSIS:DEBUG}
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_PATH:/app/logs}/edams-analysis.log
+    max-size: 100MB
+    max-history: 30
 
 # Management
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
