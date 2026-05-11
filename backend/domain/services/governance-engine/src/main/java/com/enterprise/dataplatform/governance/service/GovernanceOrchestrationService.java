@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @Service
@@ -31,6 +33,12 @@ public class GovernanceOrchestrationService {
     private final GovernanceTaskRepository taskRepository;
     private final TaskExecutionRepository executionRepository;
     private final GovernancePolicyRepository policyRepository;
+    private final RestTemplate restTemplate;
+    
+    private static final String QUALITY_SERVICE_URL = "http://quality-service:8080/api/v1/quality";
+    private static final String STANDARD_SERVICE_URL = "http://standard-service:8080/api/v1/standards";
+    private static final String NOTIFICATION_SERVICE_URL = "http://notification-service:8080/api/v1/notification";
+    private static final String REPORT_SERVICE_URL = "http://report-service:8080/api/v1/reports";
     
     @Value("${governance.task.timeout.default:3600}")
     private int defaultTimeout;
@@ -212,7 +220,7 @@ public class GovernanceOrchestrationService {
         }
         
         List<Map<String, Object>> executedSubTasks = new ArrayList<>();
-        Set<Long> completedTaskIds = new HashSet<>();
+        Set<String> completedTaskIds = new HashSet<>();
         int maxIterations = subTasks.size() * 2;
         int iteration = 0;
         
@@ -220,7 +228,7 @@ public class GovernanceOrchestrationService {
             iteration++;
             for (Map<String, Object> subTask : subTasks) {
                 String subTaskId = String.valueOf(subTask.get("id"));
-                if (completedTaskIds.contains(subTask.hashCode())) {
+                if (completedTaskIds.contains(subTaskId)) {
                     continue;
                 }
                 
@@ -228,7 +236,7 @@ public class GovernanceOrchestrationService {
                 if (dependencies != null && !dependencies.isEmpty()) {
                     boolean allDependenciesMet = dependencies.stream()
                             .allMatch(dep -> executedSubTasks.stream()
-                                    .anyMatch(e -> subTaskId.equals(String.valueOf(e.get("id")))));
+                                    .anyMatch(e -> dep.equals(String.valueOf(e.get("id")))));
                     if (!allDependenciesMet) {
                         continue;
                     }
@@ -238,7 +246,7 @@ public class GovernanceOrchestrationService {
                 subTaskResult.put("id", subTaskId);
                 subTaskResult.put("executedAt", LocalDateTime.now().toString());
                 executedSubTasks.add(subTaskResult);
-                completedTaskIds.add(subTask.hashCode());
+                completedTaskIds.add(subTaskId);
             }
         }
         
@@ -305,9 +313,54 @@ public class GovernanceOrchestrationService {
         log.info("执行数据质量检查: assetId={}, rules={}", assetId, ruleIds);
         
         Map<String, Object> result = new HashMap<>();
-        result.put("recordsChecked", 0);
-        result.put("qualityScore", 0.0);
-        result.put("issuesFound", 0);
+        
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("assetId", assetId);
+            requestBody.put("ruleIds", ruleIds != null && !ruleIds.equals("") ? 
+                    Arrays.asList(ruleIds.split(",")) : new ArrayList<>());
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    QUALITY_SERVICE_URL + "/check",
+                    requestBody,
+                    Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseData = response.getBody();
+                Map<String, Object> data = (Map<String, Object>) responseData.get("data");
+                
+                if (data != null) {
+                    result.put("recordsChecked", data.getOrDefault("totalRecords", 0));
+                    result.put("qualityScore", data.getOrDefault("qualityScore", 0.0));
+                    result.put("issuesFound", data.getOrDefault("issueCount", 0));
+                    result.put("checkId", data.getOrDefault("checkId", ""));
+                    result.put("executionTime", data.getOrDefault("executionTime", 0));
+                    result.put("details", data.getOrDefault("issues", new ArrayList<>()));
+                } else {
+                    result.put("recordsChecked", 0);
+                    result.put("qualityScore", 0.0);
+                    result.put("issuesFound", 0);
+                    result.put("error", "No data returned from quality service");
+                }
+                
+                log.info("数据质量检查完成: assetId={}, score={}, issues={}", 
+                        assetId, result.get("qualityScore"), result.get("issuesFound"));
+            } else {
+                log.warn("数据质量检查失败: assetId={}, status={}", 
+                        assetId, response.getStatusCode());
+                result.put("recordsChecked", 0);
+                result.put("qualityScore", 0.0);
+                result.put("issuesFound", 0);
+                result.put("error", "Quality check failed with status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("数据质量检查异常: assetId={}", assetId, e);
+            result.put("recordsChecked", 0);
+            result.put("qualityScore", 0.0);
+            result.put("issuesFound", 0);
+            result.put("error", "Quality check exception: " + e.getMessage());
+        }
         
         return result;
     }
@@ -317,12 +370,53 @@ public class GovernanceOrchestrationService {
      */
     private Map<String, Object> executeDataStandardSubTask(Map<String, Object> params) {
         String standardId = String.valueOf(params.getOrDefault("standardId", ""));
+        String assetId = String.valueOf(params.getOrDefault("assetId", ""));
         
-        log.info("执行数据标准检查: standardId={}", standardId);
+        log.info("执行数据标准检查: standardId={}, assetId={}", standardId, assetId);
         
         Map<String, Object> result = new HashMap<>();
-        result.put("standardCompliance", 0.0);
-        result.put("violations", 0);
+        
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("standardId", standardId);
+            requestBody.put("assetId", assetId);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    STANDARD_SERVICE_URL + "/compliance/check",
+                    requestBody,
+                    Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseData = response.getBody();
+                Map<String, Object> data = (Map<String, Object>) responseData.get("data");
+                
+                if (data != null) {
+                    result.put("standardCompliance", data.getOrDefault("complianceRate", 0.0));
+                    result.put("violations", data.getOrDefault("violationCount", 0));
+                    result.put("standardId", data.getOrDefault("standardId", standardId));
+                    result.put("violationDetails", data.getOrDefault("violations", new ArrayList<>()));
+                } else {
+                    result.put("standardCompliance", 0.0);
+                    result.put("violations", 0);
+                    result.put("error", "No data returned from standard service");
+                }
+                
+                log.info("数据标准检查完成: standardId={}, compliance={}%, violations={}", 
+                        standardId, result.get("standardCompliance"), result.get("violations"));
+            } else {
+                log.warn("数据标准检查失败: standardId={}, status={}", 
+                        standardId, response.getStatusCode());
+                result.put("standardCompliance", 0.0);
+                result.put("violations", 0);
+                result.put("error", "Standard check failed with status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("数据标准检查异常: standardId={}", standardId, e);
+            result.put("standardCompliance", 0.0);
+            result.put("violations", 0);
+            result.put("error", "Standard check exception: " + e.getMessage());
+        }
         
         return result;
     }
@@ -334,14 +428,55 @@ public class GovernanceOrchestrationService {
         String recipient = String.valueOf(params.getOrDefault("recipient", ""));
         String message = String.valueOf(params.getOrDefault("message", ""));
         String channel = String.valueOf(params.getOrDefault("channel", "EMAIL"));
+        String title = String.valueOf(params.getOrDefault("title", "通知"));
         
-        log.info("发送通知: channel={}, recipient={}", channel, recipient);
+        log.info("发送通知: channel={}, recipient={}, title={}", channel, recipient, title);
         
         Map<String, Object> result = new HashMap<>();
+        
+        try {
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("recipient", recipient);
+            requestBody.put("title", title);
+            requestBody.put("content", message);
+            requestBody.put("channel", channel);
+            requestBody.put("priority", params.getOrDefault("priority", "NORMAL"));
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    NOTIFICATION_SERVICE_URL + "/send",
+                    requestBody,
+                    Map.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> responseData = response.getBody();
+                Map<String, Object> data = (Map<String, Object>) responseData.get("data");
+                
+                if (data != null) {
+                    result.put("sent", data.getOrDefault("success", false));
+                    result.put("notificationId", data.getOrDefault("notificationId", ""));
+                    result.put("sentAt", LocalDateTime.now().toString());
+                } else {
+                    result.put("sent", true);
+                    result.put("sentAt", LocalDateTime.now().toString());
+                }
+                
+                log.info("通知发送完成: recipient={}, notificationId={}", 
+                        recipient, result.get("notificationId"));
+            } else {
+                log.warn("通知发送失败: recipient={}, status={}", 
+                        recipient, response.getStatusCode());
+                result.put("sent", false);
+                result.put("error", "Notification failed with status: " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("通知发送异常: recipient={}", recipient, e);
+            result.put("sent", false);
+            result.put("error", "Notification exception: " + e.getMessage());
+        }
+        
         result.put("channel", channel);
         result.put("recipient", recipient);
-        result.put("sent", true);
-        result.put("sentAt", LocalDateTime.now().toString());
         
         return result;
     }
@@ -456,16 +591,16 @@ public class GovernanceOrchestrationService {
         
         switch (diagnosis.getIssueType()) {
             case "DATA_QUALITY":
-                steps.add(createRemediationStep("DATA_CLEANUP", "Clean invalid data records"));
-                steps.add(createRemediationStep("RULE_UPDATE", "Update data quality rules"));
-                steps.add(createRemediationStep("NOTIFICATION", "Notify data owners"));
+                steps.add(createRemediationStep("DATA_CLEANUP", "Clean invalid data records", 1));
+                steps.add(createRemediationStep("RULE_UPDATE", "Update data quality rules", 2));
+                steps.add(createRemediationStep("NOTIFICATION", "Notify data owners", 3));
                 break;
             case "SCHEMA_VIOLATION":
-                steps.add(createRemediationStep("SCHEMA_SYNC", "Synchronize schema changes"));
-                steps.add(createRemediationStep("IMPACT_ANALYSIS", "Run impact analysis"));
+                steps.add(createRemediationStep("SCHEMA_SYNC", "Synchronize schema changes", 1));
+                steps.add(createRemediationStep("IMPACT_ANALYSIS", "Run impact analysis", 2));
                 break;
             default:
-                steps.add(createRemediationStep("MANUAL_REVIEW", "Require manual review"));
+                steps.add(createRemediationStep("MANUAL_REVIEW", "Require manual review", 1));
         }
         
         plan.setSteps(steps);
@@ -474,11 +609,11 @@ public class GovernanceOrchestrationService {
         return plan;
     }
 
-    private RemediationStep createRemediationStep(String stepType, String description) {
+    private RemediationStep createRemediationStep(String stepType, String description, int order) {
         RemediationStep step = new RemediationStep();
         step.setStepType(stepType);
         step.setDescription(description);
-        step.setOrder(steps.size() + 1);
+        step.setOrder(order);
         step.setStatus("PENDING");
         return step;
     }
